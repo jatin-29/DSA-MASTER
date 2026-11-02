@@ -20,10 +20,15 @@ const tick = (id, t) => `<td class="st"><button class="tick ${done[id] ? "on" : 
 const A = (u, inner, cls = "") => `<a ${cls ? `class="${cls}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${inner}</a>`;
 
 function render() {
-  const all = [...sheets, ...lists];
-  if (!all.find(x => x.id === cur)) cur = all[0].id;
-  $("#tabs").innerHTML = all.map(l => `<a data-id="${esc(l.id)}" class="${l.id === cur ? "on" : ""}">${esc(l.title)}</a>`).join("");
-  $("#tabs").querySelectorAll("a").forEach(a => a.onclick = () => { cur = a.dataset.id; put("dm_tab", cur); q = ""; filt = "all"; render(); });
+  const all = [{ id: "viz", title: "Visualizer" }, ...sheets, ...lists];
+  if (!all.find(x => x.id === cur)) cur = all[1] ? all[1].id : "viz";
+  const prog = items => { const n = items.length, d = items.filter(x => done[x.id]).length; return n ? `<small>${pct(d, n)}%</small>` : ""; };
+  const link = (l, icon, items) => `<a data-id="${esc(l.id)}" class="${l.id === cur ? "on" : ""}"><span class="ico">${icon}</span><span class="lbl">${esc(l.title)}</span>${items ? prog(items) : ""}</a>`;
+  $("#tabs").innerHTML = `<div class="grp">Tools</div>${link(all[0], "⚡")}
+    ${sheets.length ? `<div class="grp">DSA Sheets</div>` + sheets.map(s => link(s, "📋", s.topics.flatMap(t => t.subs.flatMap(x => x.qs)))).join("") : ""}
+    ${lists.length ? `<div class="grp">Video Courses</div>` + lists.map(l => link(l, "▶", l.videos)).join("") : ""}`;
+  $("#tabs").querySelectorAll("a").forEach(a => a.onclick = () => { cur = a.dataset.id; put("dm_tab", cur); q = ""; filt = "all"; document.body.classList.remove("open"); render(); scrollTo(0, 0); });
+  V.stop(); if (cur === "viz") return V.render();
   const S = sheets.find(x => x.id === cur);
   S ? renderSheet(S) : renderPlaylist(lists.find(l => l.id === cur));
   const qi = $("#q");
@@ -77,5 +82,7 @@ function renderPlaylist(L) {
 const load = f => fetch(f).then(r => r.ok ? r.json() : []).catch(() => []);
 Promise.all([load("sheets.json"), load("videos.json")]).then(([s, v]) => {
   sheets = s; lists = v;
-  sheets.length + lists.length ? render() : $("#view").innerHTML = `<p class="mute">No data yet.</p>`;
+  render();
 });
+
+$("#menu").onclick = () => document.body.classList.toggle("open");
