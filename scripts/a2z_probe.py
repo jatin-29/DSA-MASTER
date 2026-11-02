@@ -1,13 +1,10 @@
-# One-off: inspect bugaddr's a2z_old_sheet (public GitHub Pages) structure.
-import re, urllib.request
+import re, urllib.request, json
 B = "https://bugaddr.github.io/a2z_old_sheet/"
 g = lambda u: urllib.request.urlopen(u, timeout=30).read().decode("utf8", "ignore")
-h = g(B); print("size", len(h), "gfg", len(set(re.findall(r"geeksforgeeks\.org/problems/[^\"'\s<]+", h))))
-srcs = re.findall(r'(?:src|href)="([^"]+\.(?:js|json))"', h); print("assets", srcs)
-for s in srcs:
-    u = s if s.startswith("http") else B + s.lstrip("./")
-    try: t = g(u)
-    except Exception as e: print(u, "ERR", e); continue
-    print("==", u, len(t), "gfg", len(set(re.findall(r"geeksforgeeks\.org/problems/[^\"'\s<]+", t))), "fetch", re.findall(r"fetch\(\s*['\"`]([^'\"`]+)", t)[:5])
-    i = t.find("geeksforgeeks"); print(t[max(0, i - 800):i + 400])
-i = h.find("geeksforgeeks"); print("HTML around:", h[max(0, i - 1200):i + 400] if i >= 0 else h[:1500])
+h = g(B)
+print("REFS", sorted(set(re.findall(r"""["'`]([^"'`\s]+\.(?:json|js|csv))["'`]""", h))), re.findall(r"fetch\(([^)]{0,200})\)", h))
+s = h[h.rfind("<script"):]; print("SCRIPT", s[:3000])
+for f in set(re.findall(r"""["'`]([^"'`\s]+\.json)["'`]""", h)):
+    u = f if f.startswith("http") else B + f.lstrip("./")
+    try: t = g(u); print("==", u, len(t), "gfg", t.count("geeksforgeeks")); print(t[:1500])
+    except Exception as e: print(u, e)
