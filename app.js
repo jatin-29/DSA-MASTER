@@ -3,7 +3,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const get = k => { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } };
 const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} };
 const dur = s => s ? (s >= 3600 ? Math.floor(s / 3600) + ":" : "") + String(Math.floor(s % 3600 / 60)).padStart(s >= 3600 ? 2 : 1, "0") + ":" + String(s % 60).padStart(2, "0") : "";
-const DIFF = { easy: ["Easy", "#00b8a3"], medium: ["Medium", "#ffc01e"], hard: ["Hard", "#ff375f"] };
+const DIFF = { basic: ["Basic", "#8a8a8a"], easy: ["Easy", "#00b8a3"], medium: ["Medium", "#ffc01e"], hard: ["Hard", "#ff375f"] };
 let done = get("dm_done") || {}, openT = get("dm_open") || {}, sheets = [], lists = [], cur = get("dm_tab"), filt = "all", q = "";
 
 function ring(p) {
