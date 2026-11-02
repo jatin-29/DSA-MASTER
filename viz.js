@@ -2,7 +2,14 @@
 // returns a step-by-step trace that is animated here. Traces are saved locally.
 const V = (() => {
   const COL = { active: "#ffb020", found: "#2ee59d", visited: "#4f7cff", path: "#c06bff", bad: "#ff4d6d", dim: "#1c2340" };
-  const MODELS = ["mistral-large-latest", "mistral-medium-latest", "codestral-latest", "mistral-small-latest"];
+  const PROV = {
+    mistral: { name: "Mistral", keyUrl: "console.mistral.ai", models: ["mistral-large-latest", "mistral-medium-latest", "codestral-latest", "mistral-small-latest"] },
+    groq: { name: "Groq", keyUrl: "console.groq.com/keys", models: ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "moonshotai/kimi-k2-instruct", "openai/gpt-oss-20b"] },
+    gemini: { name: "Gemini", keyUrl: "aistudio.google.com/apikey", models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"] },
+  };
+  const prov = () => PROV[get("dm_prov")] ? get("dm_prov") : "mistral";
+  const keyOf = p => get("dm_key_" + p) || (p === "mistral" ? get("dm_mistral") : null);
+  const modelOf = p => PROV[p].models.includes(get("dm_model_" + p)) ? get("dm_model_" + p) : PROV[p].models[0];
   let P = { t: null, i: 0, timer: null, speed: 900 }, view = "new";
   const traces = () => get("dm_traces") || [];
 
@@ -37,15 +44,29 @@ const V = (() => {
 Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures); "line" must point at the code line executing; pick a small input if none given; final frame shows the answer.`;
 
   async function ask(ctx, extra, input) {
-    const key = get("dm_mistral"); if (!key) throw new Error("Pehle Mistral API key add karo (🔑 button).");
-    const r = await fetch("https://api.mistral.ai/v1/chat/completions", { method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-      body: JSON.stringify({ model: get("dm_model") || MODELS[0], temperature: 0.1, response_format: { type: "json_object" },
-        messages: [{ role: "system", content: SYS }, { role: "user", content: `${ctx}\n\n${extra ? "Extra details / code:\n" + extra + "\n\n" : ""}Input: ${input || "(choose a small illustrative input)"}` }] }) });
-    if (!r.ok) throw new Error(`Mistral error ${r.status}: ${(await r.text()).slice(0, 180)}`);
-    const t = JSON.parse((await r.json()).choices[0].message.content);
+    const p = prov(), key = keyOf(p), model = modelOf(p);
+    if (!key) throw new Error(`Pehle ${PROV[p].name} API key add karo (🔑 button).`);
+    const user = `${ctx}\n\n${extra ? "Extra details / code:\n" + extra + "\n\n" : ""}Input: ${input || "(choose a small illustrative input)"}`;
+    let r, text;
+    if (p === "gemini") {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: SYS }] }, contents: [{ role: "user", parts: [{ text: user }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }) });
+      if (!r.ok) throw new Error(`Gemini error ${r.status}: ${(await r.text()).slice(0, 180)}`);
+      text = (await r.json()).candidates?.[0]?.content?.parts?.map(x => x.text).join("") || "";
+    } else {
+      const url = p === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.mistral.ai/v1/chat/completions";
+      r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+        body: JSON.stringify({ model, temperature: 0.1, response_format: { type: "json_object" },
+          messages: [{ role: "system", content: SYS }, { role: "user", content: user }] }) });
+      if (!r.ok) throw new Error(`${PROV[p].name} error ${r.status}: ${(await r.text()).slice(0, 180)}`);
+      text = (await r.json()).choices[0].message.content;
+    }
+    const t = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
     if (!Array.isArray(t.frames) || !t.frames.length) throw new Error("AI ne steps nahi diye, dobara try karo.");
     if (!Array.isArray(t.code)) t.code = String(t.code || "").split("\n");
+    t.model = `${PROV[p].name} · ${model}`;
     return t;
   }
 
@@ -90,7 +111,7 @@ Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures)
     const D = { easy: "#2ee59d", medium: "#ffb020", hard: "#ff4d6d" }[(t.difficulty || "").toLowerCase()] || "#8b95c9";
     return `<div class="lb-crumb">${esc(t.source || "Dry Run Lab")}${t.pattern ? " &gt; " + esc(t.pattern) : ""}</div>
     <div class="lb-head"><h1>${esc(t.title || "Dry run")}</h1>${t.difficulty ? `<span class="lb-tag" style="color:${D};border-color:${D}">${esc(t.difficulty)}</span>` : ""}
-      ${t.pattern ? `<span class="lb-tag" style="color:#a58bff;border-color:#a58bff">${esc(t.pattern)}</span>` : ""}${t.link ? `<a class="lb-open" href="${esc(t.link)}" target="_blank" rel="noopener">Open problem</a>` : ""}</div>
+      ${t.pattern ? `<span class="lb-tag" style="color:#a58bff;border-color:#a58bff">${esc(t.pattern)}</span>` : ""}${t.model ? `<span class="lb-tag" style="color:#8b95c9;border-color:#3a4577">${esc(t.model)}</span>` : ""}${t.link ? `<a class="lb-open" href="${esc(t.link)}" target="_blank" rel="noopener">Open problem</a>` : ""}</div>
     <div class="lb-card"><div class="lb-k"><span class="lb-n">1</span> Question samjho</div><p>${esc(t.explanation || "")}</p><code>Input traced: ${esc(t.input || "")}</code></div>
     <div class="lb-card"><div class="lb-ctrl"><button id="lb-play">Play</button><button id="lb-back">Back</button><button id="lb-next">Step</button><button id="lb-reset">Reset</button>
       <span class="mute">Speed</span><input type="range" id="lb-speed" min="150" max="2000" step="50" value="${2150 - P.speed}"><span id="lb-step" class="lb-stepc"></span></div>
@@ -101,22 +122,24 @@ Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures)
 
   function render() {
     document.body.classList.add("lab");
-    const ts = traces(), key = !!get("dm_mistral");
+    const ts = traces(), p = prov(), key = !!keyOf(p);
     $("#view").innerHTML = `<div class="lb">
       <div class="lb-card lb-form"><div class="lb-titlerow"><div><div class="lb-brand">Dry Run Lab</div><div class="mute">Link do ya code paste karo — AI har step animate karega</div></div>
-        <div class="lb-tools"><button id="lb-key">${key ? "Change API key" : "🔑 Add Mistral key"}</button>${key ? `<button id="lb-clear">Clear API key</button>` : ""}
-        <select id="lb-model">${MODELS.map(m => `<option ${m === (get("dm_model") || MODELS[0]) ? "selected" : ""}>${m}</option>`).join("")}</select></div></div>
+        <div class="lb-tools"><select id="lb-prov">${Object.entries(PROV).map(([k, v]) => `<option value="${k}" ${k === p ? "selected" : ""}>${v.name}${keyOf(k) ? " ✓" : ""}</option>`).join("")}</select>
+        <select id="lb-model">${PROV[p].models.map(m => `<option ${m === modelOf(p) ? "selected" : ""}>${m}</option>`).join("")}</select>
+        <button id="lb-key">${key ? "Change key" : `🔑 Add ${PROV[p].name} key`}</button>${key ? `<button id="lb-clear">Clear key</button>` : ""}</div></div>
         <input id="lb-link" placeholder="Paste link: GitHub file · LeetCode · Codeforces · GeeksforGeeks" value="${esc(get("dm_lb_link") || "")}">
         <textarea id="lb-extra" rows="4" placeholder="(Optional) apna code ya problem statement yahan paste karo">${esc(get("dm_lb_extra") || "")}</textarea>
         <input id="lb-input" placeholder='(Optional) input, e.g. board = [["A","B"],["C","D"]], word = "AB"' value="${esc(get("dm_lb_in") || "")}">
-        <div class="lb-ctrl"><button class="lb-go" id="lb-run">Dry run</button><span class="mute" id="lb-msg">${key ? "" : "Mistral key sirf aapke browser mein save hoti hai."}</span></div>
+        <div class="lb-ctrl"><button class="lb-go" id="lb-run">Dry run</button><span class="mute" id="lb-msg">${key ? "" : `${PROV[p].name} key yahan se lo: ${PROV[p].keyUrl} — sirf aapke browser mein save hogi.`}</span></div>
         ${ts.length ? `<div class="lb-lbl" style="margin-top:10px">saved traces</div><div class="lb-saved">${ts.map((t, i) => `<button data-t="${i}" class="${P.t === t ? "on" : ""}">${esc(t.title)}</button>`).join("")}
           <button id="lb-export" class="ghost">Export</button><button id="lb-wipe" class="ghost">Clear</button></div>` : ""}</div>
       <div id="lb-trace">${P.t ? trace(P.t) : ""}</div></div>`;
     const msg = m => $("#lb-msg").textContent = m;
-    $("#lb-key").onclick = () => { const k = prompt("Mistral API key paste karo (sirf is browser mein save hogi):", get("dm_mistral") || ""); if (k !== null && k.trim()) { put("dm_mistral", k.trim()); render(); } };
-    if ($("#lb-clear")) $("#lb-clear").onclick = () => { try { localStorage.removeItem("dm_mistral"); } catch {} render(); };
-    $("#lb-model").onchange = e => put("dm_model", e.target.value);
+    $("#lb-prov").onchange = e => { put("dm_prov", e.target.value); render(); };
+    $("#lb-key").onclick = () => { const k = prompt(`${PROV[p].name} API key paste karo (sirf is browser mein save hogi):`, keyOf(p) || ""); if (k !== null && k.trim()) { put("dm_key_" + p, k.trim()); render(); } };
+    if ($("#lb-clear")) $("#lb-clear").onclick = () => { try { localStorage.removeItem("dm_key_" + p); if (p === "mistral") localStorage.removeItem("dm_mistral"); } catch {} render(); };
+    $("#lb-model").onchange = e => put("dm_model_" + p, e.target.value);
     $("#lb-run").onclick = async () => {
       const link = $("#lb-link").value.trim(), extra = $("#lb-extra").value.trim(), inp = $("#lb-input").value.trim();
       put("dm_lb_link", link); put("dm_lb_extra", extra); put("dm_lb_in", inp);
@@ -124,7 +147,7 @@ Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures)
       $("#lb-run").disabled = true; msg("AI dry run kar raha hai… (15–40s)");
       try { const t = await ask(await context(link), extra, inp); t.link = /^https?:/.test(link) ? link : ""; t.source = link ? new URL(link).hostname.replace("www.", "") : "Custom code";
         const all = [t, ...traces()].slice(0, 25); put("dm_traces", all); stop(); P.t = all[0]; P.i = 0; render(); play(); }
-      catch (e) { msg(e.message.includes("Failed to fetch") ? "Network/CORS error — link ya Mistral tak request nahi pahunchi. Code paste karke try karo." : e.message); $("#lb-run").disabled = false; } };
+      catch (e) { msg(e.message.includes("Failed to fetch") ? "Network/CORS error — link ya AI provider tak request nahi pahunchi. Code paste karke try karo." : e.message); $("#lb-run").disabled = false; } };
     $("#view").querySelectorAll("[data-t]").forEach(b => b.onclick = () => { stop(); P.t = traces()[+b.dataset.t]; P.i = 0; render(); });
     if ($("#lb-export")) $("#lb-export").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(traces(), null, 1)], { type: "application/json" })); a.download = "dry-run-traces.json"; a.click(); };
     if ($("#lb-wipe")) $("#lb-wipe").onclick = () => { if (confirm("Saare saved traces delete karein?")) { put("dm_traces", []); P.t = null; stop(); render(); } };
