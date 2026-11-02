@@ -1,20 +1,43 @@
-# Fetches sheet data from Codolio's public sheet API and saves raw JSON; logs its structure.
-import json, sys, urllib.request
-SHEETS = {"a2z": "strivers-a2z-dsa-sheet"}
-def show(o, d=0, k="root"):
-    if d > 4: return
-    if isinstance(o, dict):
-        print("  " * d + f"{k}: dict {list(o)[:15]}")
-        for kk, v in list(o.items())[:15]: show(v, d + 1, kk)
-    elif isinstance(o, list):
-        print("  " * d + f"{k}: list[{len(o)}]")
-        if o: show(o[0], d + 1, k + "[0]")
-for key, slug in SHEETS.items():
-    url = f"https://node.codolio.com/api/question-tracker/v2/sheet/get-sheet-data-by-slug/{slug}"
-    try:
-        data = json.load(urllib.request.urlopen(url, timeout=30))
-    except Exception as e:
-        print(key, "FAILED", e, file=sys.stderr); continue
-    json.dump(data, open(f"sheet-{key}.json", "w"), ensure_ascii=False)
-    show(data)
-    print("SAMPLE", json.dumps(data, ensure_ascii=False)[:2500])
+# Fetches sheets from Codolio's public sheet API and writes a normalized sheets.json.
+import json, sys, urllib.request, urllib.parse
+SHEETS = ["strivers-a2z-dsa-sheet"]
+API = "https://node.codolio.com/api/question-tracker/v2/sheet/get-sheet-data-by-slug/"
+get = lambda u: json.load(urllib.request.urlopen(u, timeout=30))
+
+def all_mappings(slug):
+    first = get(API + slug)["data"]
+    maps, seen, cur = list(first["mappings"]), {m["_id"] for m in first["mappings"]}, first["pagination"].get("nextCursor")
+    param = None
+    while cur and first["pagination"].get("hasNextPage", True):
+        got = None
+        for p in ([param] if param else ["cursor", "nextCursor", "after"]):
+            d = get(API + slug + "?" + urllib.parse.urlencode({p: cur}))["data"]
+            new = [m for m in d["mappings"] if m["_id"] not in seen]
+            if new: param, got = p, d; break
+        if not got: print("pagination stopped; cursor param unknown", file=sys.stderr); break
+        new = [m for m in got["mappings"] if m["_id"] not in seen]
+        maps += new; seen |= {m["_id"] for m in new}
+        cur = got["pagination"].get("nextCursor") if got["pagination"].get("hasNextPage") else None
+    return first["sheet"], maps
+
+out = []
+for slug in SHEETS:
+    try: sheet, maps = all_mappings(slug)
+    except Exception as e: print(slug, "FAILED", e, file=sys.stderr); continue
+    cfg = sheet.get("config") or {}
+    tord, sord = cfg.get("topicOrder") or [], cfg.get("subTopicOrder") or {}
+    topics = {}
+    for m in maps:
+        q = m.get("questionId") or {}
+        topics.setdefault(m.get("topic") or "Other", {}).setdefault(m.get("subTopic") or "", []).append({
+            "id": m["_id"], "title": m.get("title") or q.get("name"), "url": q.get("problemUrl"),
+            "platform": q.get("platform"), "difficulty": q.get("difficulty"), "video": m.get("resource"), "rank": m.get("rank") or 0})
+    idx = lambda order, k: order.index(k) if k in order else 10**6
+    T = []
+    for t in sorted(topics, key=lambda k: idx(tord, k)):
+        subs = topics[t]
+        T.append({"name": t, "subs": [{"name": s, "qs": sorted(subs[s], key=lambda x: x["rank"])} for s in sorted(subs, key=lambda k: idx(sord.get(t, []), k))]})
+    out.append({"id": slug, "title": sheet.get("name"), "link": sheet.get("link"), "topics": T})
+    print(slug, sheet.get("name"), len(maps), "questions,", len(T), "topics")
+    print("SAMPLE", json.dumps(maps[0], ensure_ascii=False)[:800])
+json.dump(out, open("sheets.json", "w"), ensure_ascii=False)

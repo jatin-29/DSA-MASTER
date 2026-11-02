@@ -3,7 +3,8 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const get = k => { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } };
 const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} };
 const dur = s => s ? (s >= 3600 ? Math.floor(s / 3600) + ":" : "") + String(Math.floor(s % 3600 / 60)).padStart(s >= 3600 ? 2 : 1, "0") + ":" + String(s % 60).padStart(2, "0") : "";
-let done = get("dm_done") || {}, lists = [], cur = get("dm_tab"), filt = "all", q = "";
+const DIFF = { easy: ["Easy", "#00b8a3"], medium: ["Medium", "#ffc01e"], hard: ["Hard", "#ff375f"] };
+let done = get("dm_done") || {}, openT = get("dm_open") || {}, sheets = [], lists = [], cur = get("dm_tab"), filt = "all", q = "";
 
 function ring(p) {
   const r = 42, c = 2 * Math.PI * r;
@@ -11,30 +12,70 @@ function ring(p) {
   <circle cx="48" cy="48" r="${r}" stroke="var(--green)" stroke-linecap="round" stroke-dasharray="${c * p / 100} ${c}" transform="rotate(-90 48 48)"/>
   <text x="48" y="54" text-anchor="middle" fill="var(--text)" font-size="18" font-weight="600">${p}%</text></svg>`;
 }
+const pct = (d, n) => n ? Math.round(d * 100 / n) : 0;
+const filters = ph => `<div class="filters"><input id="q" placeholder="${ph}" value="${esc(q)}">
+  ${["all", "todo", "done"].map(f => `<button class="chip ${filt === f ? "on" : ""}" data-f="${f}">${{ all: "All", todo: "Pending", done: "Completed" }[f]}</button>`).join("")}</div>`;
+const keep = (id, title) => (filt === "all" || (filt === "done") === !!done[id]) && (!q || String(title).toLowerCase().includes(q));
+const tick = (id, t) => `<td class="st"><button class="tick ${done[id] ? "on" : ""}" data-v="${esc(id)}" title="${t}">✓</button></td>`;
+const A = (u, inner, cls = "") => `<a ${cls ? `class="${cls}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${inner}</a>`;
+
 function render() {
-  const L = lists.find(l => l.id === cur) || lists[0]; cur = L.id;
-  $("#tabs").innerHTML = lists.map(l => `<a data-id="${l.id}" class="${l.id === cur ? "on" : ""}">${esc(l.title)}</a>`).join("");
-  $("#tabs").querySelectorAll("a").forEach(a => a.onclick = () => { cur = a.dataset.id; put("dm_tab", cur); render(); });
-  const n = L.videos.length, d = L.videos.filter(v => done[v.id]).length, p = n ? Math.round(d * 100 / n) : 0;
+  const all = [...sheets, ...lists];
+  if (!all.find(x => x.id === cur)) cur = all[0].id;
+  $("#tabs").innerHTML = all.map(l => `<a data-id="${esc(l.id)}" class="${l.id === cur ? "on" : ""}">${esc(l.title)}</a>`).join("");
+  $("#tabs").querySelectorAll("a").forEach(a => a.onclick = () => { cur = a.dataset.id; put("dm_tab", cur); q = ""; filt = "all"; render(); });
+  const S = sheets.find(x => x.id === cur);
+  S ? renderSheet(S) : renderPlaylist(lists.find(l => l.id === cur));
+  const qi = $("#q");
+  qi.oninput = () => { q = qi.value.toLowerCase(); render(); const n = $("#q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+  $("#view").querySelectorAll(".chip").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
+  $("#view").querySelectorAll(".tick").forEach(b => b.onclick = () => { done[b.dataset.v] ? delete done[b.dataset.v] : done[b.dataset.v] = 1; put("dm_done", done); render(); });
+  $("#view").querySelectorAll("details.topic").forEach(el => el.ontoggle = () => { if (q || filt !== "all") return; openT[el.dataset.k] = el.open; put("dm_open", openT); });
+}
+
+function renderSheet(S) {
+  const qs = S.topics.flatMap(t => t.subs.flatMap(s => s.qs)), n = qs.length, d = qs.filter(x => done[x.id]).length, p = pct(d, n);
+  const by = k => { const a = qs.filter(x => (x.difficulty || "").toLowerCase() === k); return [a.filter(x => done[x.id]).length, a.length]; };
+  let h = `<div class="top"><div class="panel stat">${ring(p)}<div><div class="big">${esc(S.title)}</div>
+    <div class="mute">${n} problems · ${S.topics.length} steps${S.link ? " · " + A(S.link, "Original ↗", "lnk") : ""}</div>
+    <div class="bar"><i style="width:${p}%"></i></div><div class="mute" style="margin-top:6px"><b style="color:var(--green)">${d}</b> solved · <b style="color:var(--yellow)">${n - d}</b> remaining</div></div></div>
+    <div class="panel diffs">${Object.entries(DIFF).map(([k, [l, c]]) => { const [a, b] = by(k); return `<div class="dpill"><span style="color:${c}">${l}</span><b>${a}<span class="mute">/${b}</span></b></div>`; }).join("")}</div></div>
+    ${filters("Search problems")}`;
+  const filtering = q || filt !== "all";
+  S.topics.forEach((t, ti) => {
+    const tq = t.subs.flatMap(s => s.qs), td = tq.filter(x => done[x.id]).length, key = S.id + ":" + ti;
+    const body = t.subs.map(s => {
+      const rows = s.qs.filter(x => keep(x.id, x.title)); if (!rows.length) return "";
+      return `${s.name ? `<div class="sub">${esc(s.name)}</div>` : ""}<table><tbody>${rows.map(x => {
+        const [l, c] = DIFF[(x.difficulty || "").toLowerCase()] || ["—", "var(--mute)"];
+        return `<tr>${tick(x.id, "Mark solved")}<td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}</td>
+          <td class="df" style="color:${c}">${l}</td><td class="ic">${x.url ? A(x.url, esc(x.platform || "Solve"), "lnk") : ""}</td>
+          <td class="ic">${x.video ? A(x.video, "▶", "yt") : ""}</td></tr>`; }).join("")}</tbody></table>`; }).join("");
+    if (filtering && !body) return;
+    h += `<details class="topic" data-k="${esc(key)}" ${filtering || openT[key] ? "open" : ""}><summary><span>${esc(t.name)}</span>
+      <span class="tp"><span class="bar sm"><i style="width:${pct(td, tq.length)}%"></i></span>${td}/${tq.length}</span></summary>${body}</details>`;
+  });
+  $("#view").innerHTML = h;
+}
+
+function renderPlaylist(L) {
+  const n = L.videos.length, d = L.videos.filter(v => done[v.id]).length, p = pct(d, n);
   const left = L.videos.filter(v => !done[v.id]).reduce((a, v) => a + (v.duration || 0), 0);
-  const rows = L.videos.map((v, i) => ({ ...v, i })).filter(v =>
-    (filt === "all" || (filt === "done") === !!done[v.id]) && (!q || v.title.toLowerCase().includes(q)));
+  const rows = L.videos.map((v, i) => ({ ...v, i })).filter(v => keep(v.id, v.title));
   $("#view").innerHTML = `
   <div class="top"><div class="panel stat">${ring(p)}<div><div class="big">${esc(L.title)}</div>
     <div class="mute">${esc(L.channel)} · ${n} videos</div><div class="bar"><i style="width:${p}%"></i></div>
     <div class="mute" style="margin-top:6px"><b style="color:var(--green)">${d}</b> completed · <b style="color:var(--yellow)">${n - d}</b> remaining${left ? " · " + dur(left) + " left" : ""}</div></div></div></div>
-  <div class="filters"><input id="q" placeholder="Search videos" value="${esc(q)}">
-    ${["all", "todo", "done"].map(f => `<button class="chip ${filt === f ? "on" : ""}" data-f="${f}">${{ all: "All", todo: "Pending", done: "Completed" }[f]}</button>`).join("")}</div>
+  ${filters("Search videos")}
   <table><thead><tr><th>Status</th><th></th><th>Title</th><th>Duration</th></tr></thead><tbody>
-  ${rows.map(v => { const u = `https://www.youtube.com/watch?v=${v.id}&list=${L.id}&index=${v.i + 1}`; return `<tr>
-    <td class="st"><button class="tick ${done[v.id] ? "on" : ""}" data-v="${v.id}" title="Mark complete">✓</button></td>
-    <td style="width:136px"><a href="${u}" target="_blank" rel="noopener"><img class="thumb" loading="lazy" src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" alt=""></a></td>
-    <td class="vt"><span class="idx">${v.i + 1}.</span><a href="${u}" target="_blank" rel="noopener">${esc(v.title)}</a></td>
-    <td class="dur">${dur(v.duration)}</td></tr>` }).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
+  ${rows.map(v => { const u = `https://www.youtube.com/watch?v=${v.id}&list=${L.id}&index=${v.i + 1}`; return `<tr>${tick(v.id, "Mark complete")}
+    <td style="width:136px">${A(u, `<img class="thumb" loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="">`)}</td>
+    <td class="vt"><span class="idx">${v.i + 1}.</span>${A(u, esc(v.title))}</td><td class="dur">${dur(v.duration)}</td></tr>`; }).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
   </tbody></table>`;
-  $("#view").querySelectorAll(".tick").forEach(b => b.onclick = () => { done[b.dataset.v] ? delete done[b.dataset.v] : done[b.dataset.v] = 1; put("dm_done", done); render(); });
-  $("#view").querySelectorAll(".chip").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
-  const qi = $("#q"); qi.oninput = () => { q = qi.value.toLowerCase(); render(); const n = $("#q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
 }
-fetch("videos.json").then(r => r.json()).then(j => { lists = j; render(); })
-  .catch(() => $("#view").innerHTML = `<p class="mute">Couldn't load videos.json</p>`);
+
+const load = f => fetch(f).then(r => r.ok ? r.json() : []).catch(() => []);
+Promise.all([load("sheets.json"), load("videos.json")]).then(([s, v]) => {
+  sheets = s; lists = v;
+  sheets.length + lists.length ? render() : $("#view").innerHTML = `<p class="mute">No data yet.</p>`;
+});

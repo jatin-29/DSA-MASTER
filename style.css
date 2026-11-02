@@ -23,3 +23,15 @@ td.st{width:48px}.tick{width:22px;height:22px;border-radius:50%;border:2px solid
 .vt a{color:var(--text);text-decoration:none}.vt a:hover{color:#5ca7ff}.idx{color:var(--mute);margin-right:6px}
 .dur{color:var(--mute);white-space:nowrap;width:70px}
 @media(max-width:600px){.thumb{width:84px}td{padding:6px}.dur{display:none}}
+.diffs{display:flex;flex-direction:column;justify-content:center;gap:8px;min-width:200px}
+.dpill{display:flex;justify-content:space-between;gap:24px;background:var(--layer2);border-radius:8px;padding:6px 12px}
+.topic{background:var(--layer);border-radius:8px;margin-bottom:10px;overflow:hidden}
+.topic summary{cursor:pointer;padding:14px 16px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px;list-style:none}
+.topic summary::-webkit-details-marker{display:none}.topic[open] summary{border-bottom:1px solid var(--line)}
+.tp{display:flex;align-items:center;gap:10px;color:var(--mute);font-weight:500;white-space:nowrap}.bar.sm{width:90px;margin:0}
+.sub{padding:10px 16px 4px;color:var(--orange);font-weight:600;font-size:13px}
+.topic tbody tr:nth-child(odd){background:transparent}.topic tbody tr:nth-child(even){background:#2f2f2f}
+td.df{width:80px;font-weight:500}td.ic{width:70px;text-align:center}
+.lnk{color:#5ca7ff;text-decoration:none;text-transform:capitalize}.lnk:hover{text-decoration:underline}
+.yt{display:inline-grid;place-items:center;width:28px;height:20px;border-radius:5px;background:#ff0033;color:#fff;text-decoration:none;font-size:11px}
+@media(max-width:600px){td.ic{width:auto}.bar.sm{display:none}}
