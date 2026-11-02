@@ -54,7 +54,7 @@ function renderSheet(S) {
       return `${s.name ? `<div class="sub">${esc(s.name)}</div>` : ""}<table><tbody>${rows.map(x => {
         const [l, c] = DIFF[(x.difficulty || "").toLowerCase()] || ["—", "var(--mute)"];
         return `<tr>${tick(x.id, "Mark solved")}<td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}${x.tags && x.tags.length ? `<div class="tags">${x.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</td>
-          <td class="df" style="color:${c}">${l}</td><td class="ic">${x.url ? A(x.url, esc(x.platform || "Solve"), "lnk") : ""}</td>
+          <td class="df" style="color:${c}">${l}</td><td class="ic lk">${x.url ? A(x.url, esc(x.platform === "tuf" ? "TUF" : x.platform || "Solve"), "lnk") : ""}${x.links ? [["gfg", "GFG"], ["lc", "LeetCode"], ["cs", "Ninjas"]].filter(([k]) => x.links[k] && !(x.url || "").includes(x.links[k].split("/")[2])).map(([k, l]) => A(x.links[k], l, "lnk " + k)).join("") : ""}</td>
           <td class="ic">${x.video ? A(x.video, "▶", "yt") : ""}</td></tr>`; }).join("")}</tbody></table>`; }).join("");
     if (filtering && !body) return;
     h += `<details class="topic" data-k="${esc(key)}" ${filtering || openT[key] ? "open" : ""}><summary><span>${esc(t.name)}</span>

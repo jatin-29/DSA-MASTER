@@ -73,3 +73,4 @@ body.lab{background:#0a0f1f;background-image:linear-gradient(#ffffff08 1px,trans
 .lb-code{background:#050814;border-radius:8px;padding:10px 0;max-height:480px;overflow:auto;font:13px/1.65 ui-monospace,Menlo,monospace;white-space:pre}
 .lb-code div{padding:0 12px}.lb-code i{display:inline-block;width:30px;color:#4b547f;font-style:normal}.lb-code div.on{background:#ffb02026;box-shadow:inset 3px 0 0 #ffb020}
 .lb-map .lb-box{display:flex;gap:6px;align-items:center}body.lab #side{background:#0b1124;border-color:#1f2a55}
+td.ic.lk{width:auto;white-space:nowrap;text-align:left}td.lk a{margin-right:10px}.lnk.gfg{color:#2f8d46}.lnk.lc{color:#ffa116}.lnk.cs{color:#f78f2e}
