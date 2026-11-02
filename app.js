@@ -53,7 +53,7 @@ function renderSheet(S) {
       const rows = s.qs.filter(x => keep(x.id, x.title)); if (!rows.length) return "";
       return `${s.name ? `<div class="sub">${esc(s.name)}</div>` : ""}<table><tbody>${rows.map(x => {
         const [l, c] = DIFF[(x.difficulty || "").toLowerCase()] || ["—", "var(--mute)"];
-        return `<tr>${tick(x.id, "Mark solved")}<td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}</td>
+        return `<tr>${tick(x.id, "Mark solved")}<td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}${x.tags && x.tags.length ? `<div class="tags">${x.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</td>
           <td class="df" style="color:${c}">${l}</td><td class="ic">${x.url ? A(x.url, esc(x.platform || "Solve"), "lnk") : ""}</td>
           <td class="ic">${x.video ? A(x.video, "▶", "yt") : ""}</td></tr>`; }).join("")}</tbody></table>`; }).join("");
     if (filtering && !body) return;
@@ -73,15 +73,15 @@ function renderPlaylist(L) {
     <div class="mute" style="margin-top:6px"><b style="color:var(--green)">${d}</b> completed · <b style="color:var(--yellow)">${n - d}</b> remaining${left ? " · " + dur(left) + " left" : ""}</div></div></div></div>
   ${filters("Search videos")}
   <table><thead><tr><th>Status</th><th></th><th>Title</th><th>Duration</th></tr></thead><tbody>
-  ${rows.map(v => { const u = `https://www.youtube.com/watch?v=${v.id}&list=${L.id}&index=${v.i + 1}`; return `<tr>${tick(v.id, "Mark complete")}
+  ${rows.map(v => { const u = L.id.startsWith("PL") ? `https://www.youtube.com/watch?v=${v.id}&list=${L.id}&index=${v.i + 1}` : `https://www.youtube.com/watch?v=${v.id}`; return `<tr>${tick(v.id, "Mark complete")}
     <td style="width:136px">${A(u, `<img class="thumb" loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="">`)}</td>
-    <td class="vt"><span class="idx">${v.i + 1}.</span>${A(u, esc(v.title))}</td><td class="dur">${dur(v.duration)}</td></tr>`; }).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
+    <td class="vt"><span class="idx">${v.i + 1}.</span>${A(u, esc(v.title))}${v.section ? `<div class="mute" style="font-size:12px">${esc(v.section)}</div>` : ""}</td><td class="dur">${dur(v.duration)}</td></tr>`; }).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
   </tbody></table>`;
 }
 
 const load = f => fetch(f).then(r => r.ok ? r.json() : []).catch(() => []);
-Promise.all([load("sheets.json"), load("videos.json")]).then(([s, v]) => {
-  sheets = s; lists = v;
+Promise.all([load("sheets.json"), load("videos.json"), load("data/extra.json")]).then(([s, v, x]) => {
+  sheets = [...s, ...(x.sheets || [])]; lists = [...v, ...(x.lists || [])];
   render();
 });
 
