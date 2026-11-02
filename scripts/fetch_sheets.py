@@ -10,10 +10,11 @@ def show(o, d=0, k="root"):
         print("  " * d + f"{k}: list[{len(o)}]")
         if o: show(o[0], d + 1, k + "[0]")
 for key, slug in SHEETS.items():
-    url = f"https://node.codolio.com/api/question-tracker/v1/sheet/public/get-sheet-by-slug/{slug}"
+    url = f"https://node.codolio.com/api/question-tracker/v2/sheet/get-sheet-data-by-slug/{slug}"
     try:
         data = json.load(urllib.request.urlopen(url, timeout=30))
     except Exception as e:
         print(key, "FAILED", e, file=sys.stderr); continue
     json.dump(data, open(f"sheet-{key}.json", "w"), ensure_ascii=False)
     show(data)
+    print("SAMPLE", json.dumps(data, ensure_ascii=False)[:2500])
