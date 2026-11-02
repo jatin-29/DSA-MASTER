@@ -29,10 +29,10 @@ const V = (() => {
     return `Problem link: ${u}`;
   }
 
-  const SYS = `You are a DSA dry-run engine for Indian students. Simulate the solution EXACTLY on the input and return ONLY JSON:
-{"title":str,"difficulty":"Easy|Medium|Hard","pattern":str,"explanation":"2-3 lines in simple Hinglish (Hindi in Roman script) explaining the question",
+  const SYS = `You are a DSA dry-run engine. Simulate the solution EXACTLY on the input and return ONLY JSON:
+{"title":str,"difficulty":"Easy|Medium|Hard","pattern":str,"explanation":"2-3 lines in simple English explaining the question",
 "input":"the exact input traced","language":"cpp|java|python","code":[every line of the full solution code, keep original code if given],
-"frames":[{"line":1-based line number in code,"note":"short Hinglish note of what just happened","vars":{"name":value},
+"frames":[{"line":1-based line number in code,"note":"short English note of what just happened","vars":{"name":value},
 "structs":[ one or more of:
  {"type":"array","name":str,"values":[..],"hl":{"index":"active|found|visited|path|bad|dim"},"ptr":{"ptrName":index}},
  {"type":"grid","name":str,"cells":[[..]],"hl":{"r,c":"active|found|visited|path|bad|dim"}},
@@ -41,11 +41,11 @@ const V = (() => {
  {"type":"tree","name":str,"nodes":[level-order values, null for missing],"hl":{"index":"color"}},
  {"type":"list","name":str,"values":[..],"hl":{"index":"color"},"ptr":{"ptrName":index}},
  {"type":"calls","name":"recursion","items":["f(0,0)",...]} ]}]}
-Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures); "line" must point at the code line executing; pick a small input if none given; final frame shows the answer.`;
+Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures); "line" must point at the code line executing; pick a small input if none given; final frame shows the answer. Write ALL text in English only.`;
 
   async function ask(ctx, extra, input) {
     const p = prov(), key = keyOf(p), model = modelOf(p);
-    if (!key) throw new Error(`Pehle ${PROV[p].name} API key add karo (🔑 button).`);
+    if (!key) throw new Error(`Add your ${PROV[p].name} API key first (🔑 button).`);
     const user = `${ctx}\n\n${extra ? "Extra details / code:\n" + extra + "\n\n" : ""}Input: ${input || "(choose a small illustrative input)"}`;
     let r, text;
     if (p === "gemini") {
@@ -64,7 +64,7 @@ Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures)
       text = (await r.json()).choices[0].message.content;
     }
     const t = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
-    if (!Array.isArray(t.frames) || !t.frames.length) throw new Error("AI ne steps nahi diye, dobara try karo.");
+    if (!Array.isArray(t.frames) || !t.frames.length) throw new Error("The AI returned no steps, please try again.");
     if (!Array.isArray(t.code)) t.code = String(t.code || "").split("\n");
     t.model = `${PROV[p].name} · ${model}`;
     return t;
@@ -112,7 +112,7 @@ Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures)
     return `<div class="lb-crumb">${esc(t.source || "Dry Run Lab")}${t.pattern ? " &gt; " + esc(t.pattern) : ""}</div>
     <div class="lb-head"><h1>${esc(t.title || "Dry run")}</h1>${t.difficulty ? `<span class="lb-tag" style="color:${D};border-color:${D}">${esc(t.difficulty)}</span>` : ""}
       ${t.pattern ? `<span class="lb-tag" style="color:#a58bff;border-color:#a58bff">${esc(t.pattern)}</span>` : ""}${t.model ? `<span class="lb-tag" style="color:#8b95c9;border-color:#3a4577">${esc(t.model)}</span>` : ""}${t.link ? `<a class="lb-open" href="${esc(t.link)}" target="_blank" rel="noopener">Open problem</a>` : ""}</div>
-    <div class="lb-card"><div class="lb-k"><span class="lb-n">1</span> Question samjho</div><p>${esc(t.explanation || "")}</p><code>Input traced: ${esc(t.input || "")}</code></div>
+    <div class="lb-card"><div class="lb-k"><span class="lb-n">1</span> Understand the question</div><p>${esc(t.explanation || "")}</p><code>Input traced: ${esc(t.input || "")}</code></div>
     <div class="lb-card"><div class="lb-ctrl"><button id="lb-play">Play</button><button id="lb-back">Back</button><button id="lb-next">Step</button><button id="lb-reset">Reset</button>
       <span class="mute">Speed</span><input type="range" id="lb-speed" min="150" max="2000" step="50" value="${2150 - P.speed}"><span id="lb-step" class="lb-stepc"></span></div>
       <div id="lb-note" class="lb-note"></div>
@@ -124,33 +124,33 @@ Rules: 10-70 frames; each frame is a FULL snapshot (repeat unchanged structures)
     document.body.classList.add("lab");
     const ts = traces(), p = prov(), key = !!keyOf(p);
     $("#view").innerHTML = `<div class="lb">
-      <div class="lb-card lb-form"><div class="lb-titlerow"><div><div class="lb-brand">Dry Run Lab</div><div class="mute">Link do ya code paste karo — AI har step animate karega</div></div>
+      <div class="lb-card lb-form"><div class="lb-titlerow"><div><div class="lb-brand">Dry Run Lab</div><div class="mute">Paste a link or your code — AI animates every step</div></div>
         <div class="lb-tools"><select id="lb-prov">${Object.entries(PROV).map(([k, v]) => `<option value="${k}" ${k === p ? "selected" : ""}>${v.name}${keyOf(k) ? " ✓" : ""}</option>`).join("")}</select>
         <select id="lb-model">${PROV[p].models.map(m => `<option ${m === modelOf(p) ? "selected" : ""}>${m}</option>`).join("")}</select>
         <button id="lb-key">${key ? "Change key" : `🔑 Add ${PROV[p].name} key`}</button>${key ? `<button id="lb-clear">Clear key</button>` : ""}</div></div>
         <input id="lb-link" placeholder="Paste link: GitHub file · LeetCode · Codeforces · GeeksforGeeks" value="${esc(get("dm_lb_link") || "")}">
-        <textarea id="lb-extra" rows="4" placeholder="(Optional) apna code ya problem statement yahan paste karo">${esc(get("dm_lb_extra") || "")}</textarea>
+        <textarea id="lb-extra" rows="4" placeholder="(Optional) paste your code or the problem statement here">${esc(get("dm_lb_extra") || "")}</textarea>
         <input id="lb-input" placeholder='(Optional) input, e.g. board = [["A","B"],["C","D"]], word = "AB"' value="${esc(get("dm_lb_in") || "")}">
-        <div class="lb-ctrl"><button class="lb-go" id="lb-run">Dry run</button><span class="mute" id="lb-msg">${key ? "" : `${PROV[p].name} key yahan se lo: ${PROV[p].keyUrl} — sirf aapke browser mein save hogi.`}</span></div>
+        <div class="lb-ctrl"><button class="lb-go" id="lb-run">Dry run</button><span class="mute" id="lb-msg">${key ? "" : `${PROV[p].name} key: get one at ${PROV[p].keyUrl}. It is saved only in this browser.`}</span></div>
         ${ts.length ? `<div class="lb-lbl" style="margin-top:10px">saved traces</div><div class="lb-saved">${ts.map((t, i) => `<button data-t="${i}" class="${P.t === t ? "on" : ""}">${esc(t.title)}</button>`).join("")}
           <button id="lb-export" class="ghost">Export</button><button id="lb-wipe" class="ghost">Clear</button></div>` : ""}</div>
       <div id="lb-trace">${P.t ? trace(P.t) : ""}</div></div>`;
     const msg = m => $("#lb-msg").textContent = m;
     $("#lb-prov").onchange = e => { put("dm_prov", e.target.value); render(); };
-    $("#lb-key").onclick = () => { const k = prompt(`${PROV[p].name} API key paste karo (sirf is browser mein save hogi):`, keyOf(p) || ""); if (k !== null && k.trim()) { put("dm_key_" + p, k.trim()); render(); } };
+    $("#lb-key").onclick = () => { const k = prompt(`${PROV[p].name} API key (saved only in this browser):`, keyOf(p) || ""); if (k !== null && k.trim()) { put("dm_key_" + p, k.trim()); render(); } };
     if ($("#lb-clear")) $("#lb-clear").onclick = () => { try { localStorage.removeItem("dm_key_" + p); if (p === "mistral") localStorage.removeItem("dm_mistral"); } catch {} render(); };
     $("#lb-model").onchange = e => put("dm_model_" + p, e.target.value);
     $("#lb-run").onclick = async () => {
       const link = $("#lb-link").value.trim(), extra = $("#lb-extra").value.trim(), inp = $("#lb-input").value.trim();
       put("dm_lb_link", link); put("dm_lb_extra", extra); put("dm_lb_in", inp);
-      if (!link && !extra) return msg("Link ya code dono mein se kuch to do.");
-      $("#lb-run").disabled = true; msg("AI dry run kar raha hai… (15–40s)");
+      if (!link && !extra) return msg("Add a link or some code first.");
+      $("#lb-run").disabled = true; msg("AI is dry-running… (15–40s)");
       try { const t = await ask(await context(link), extra, inp); t.link = /^https?:/.test(link) ? link : ""; t.source = link ? new URL(link).hostname.replace("www.", "") : "Custom code";
         const all = [t, ...traces()].slice(0, 25); put("dm_traces", all); stop(); P.t = all[0]; P.i = 0; render(); play(); }
-      catch (e) { msg(e.message.includes("Failed to fetch") ? "Network/CORS error — link ya AI provider tak request nahi pahunchi. Code paste karke try karo." : e.message); $("#lb-run").disabled = false; } };
+      catch (e) { msg(e.message.includes("Failed to fetch") ? "Network/CORS error — the request could not reach the link or the AI provider. Try pasting the code instead." : e.message); $("#lb-run").disabled = false; } };
     $("#view").querySelectorAll("[data-t]").forEach(b => b.onclick = () => { stop(); P.t = traces()[+b.dataset.t]; P.i = 0; render(); });
     if ($("#lb-export")) $("#lb-export").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(traces(), null, 1)], { type: "application/json" })); a.download = "dry-run-traces.json"; a.click(); };
-    if ($("#lb-wipe")) $("#lb-wipe").onclick = () => { if (confirm("Saare saved traces delete karein?")) { put("dm_traces", []); P.t = null; stop(); render(); } };
+    if ($("#lb-wipe")) $("#lb-wipe").onclick = () => { if (confirm("Delete all saved traces?")) { put("dm_traces", []); P.t = null; stop(); render(); } };
     if (!P.t) return;
     $("#lb-play").onclick = play;
     $("#lb-back").onclick = () => { stop(); P.i = Math.max(0, P.i - 1); show(); };
