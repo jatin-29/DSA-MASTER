@@ -35,6 +35,11 @@ function render() {
   qi.oninput = () => { q = qi.value.toLowerCase(); render(); const n = $("#q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
   $("#view").querySelectorAll(".chip").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
   $("#view").querySelectorAll(".tick").forEach(b => b.onclick = () => { done[b.dataset.v] ? delete done[b.dataset.v] : done[b.dataset.v] = 1; put("dm_done", done); render(); });
+  if (S) $("#view").querySelectorAll("[data-q]").forEach(a => a.onclick = () => {
+    const qs = S.topics.flatMap(t => t.subs.flatMap(s => s.qs.map(x => ({ ...x, section: t.name })))).filter(x => Player.ytId(x.video));
+    Player.open(qs.map(x => ({ key: x.id, vid: Player.ytId(x.video), start: Player.ytStart(x.video), title: x.title, section: x.section })), qs.findIndex(x => x.id === a.dataset.q), S.title); });
+  else $("#view").querySelectorAll("[data-p]").forEach(a => a.onclick = () => { const L = lists.find(l => l.id === cur);
+    Player.open(L.videos.map(v => ({ key: v.id, vid: v.id, title: v.title, section: v.section, dur: dur(v.duration) })), +a.dataset.p, L.title); });
   $("#view").querySelectorAll("details.topic").forEach(el => el.ontoggle = () => { if (q || filt !== "all") return; openT[el.dataset.k] = el.open; put("dm_open", openT); });
 }
 
@@ -55,7 +60,7 @@ function renderSheet(S) {
         const [l, c] = DIFF[(x.difficulty || "").toLowerCase()] || ["—", "var(--mute)"];
         return `<tr>${tick(x.id, "Mark solved")}<td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}${x.tags && x.tags.length ? `<div class="tags">${x.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</td>
           <td class="df" style="color:${c}">${l}</td><td class="ic lk">${x.url ? A(x.url, esc(x.platform === "tuf" ? "TUF" : x.platform || "Solve"), "lnk") : ""}${x.links ? [["gfg", "GFG"], ["lc", "LeetCode"], ["cs", "Ninjas"]].filter(([k]) => x.links[k] && !(x.url || "").includes(x.links[k].split("/")[2])).map(([k, l]) => A(x.links[k], l, "lnk " + k)).join("") : ""}</td>
-          <td class="ic">${x.video ? A(x.video, "▶", "yt") : ""}</td></tr>`; }).join("")}</tbody></table>`; }).join("");
+          <td class="ic">${x.video && Player.ytId(x.video) ? `<a class="yt play" data-q="${esc(x.id)}" title="Watch here">▶</a>` : x.video ? A(x.video, "▶", "yt") : ""}</td></tr>`; }).join("")}</tbody></table>`; }).join("");
     if (filtering && !body) return;
     h += `<details class="topic" data-k="${esc(key)}" ${filtering || openT[key] ? "open" : ""}><summary><span>${esc(t.name)}</span>
       <span class="tp"><span class="bar sm"><i style="width:${pct(td, tq.length)}%"></i></span>${td}/${tq.length}</span></summary>${body}</details>`;
@@ -73,9 +78,9 @@ function renderPlaylist(L) {
     <div class="mute" style="margin-top:6px"><b style="color:var(--green)">${d}</b> completed · <b style="color:var(--yellow)">${n - d}</b> remaining${left ? " · " + dur(left) + " left" : ""}</div></div></div></div>
   ${filters("Search videos")}
   <table><thead><tr><th>Status</th><th></th><th>Title</th><th>Duration</th></tr></thead><tbody>
-  ${rows.map(v => { const u = L.id.startsWith("PL") ? `https://www.youtube.com/watch?v=${v.id}&list=${L.id}&index=${v.i + 1}` : `https://www.youtube.com/watch?v=${v.id}`; return `<tr>${tick(v.id, "Mark complete")}
-    <td style="width:136px">${A(u, `<img class="thumb" loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="">`)}</td>
-    <td class="vt"><span class="idx">${v.i + 1}.</span>${A(u, esc(v.title))}${v.section ? `<div class="mute" style="font-size:12px">${esc(v.section)}</div>` : ""}</td><td class="dur">${dur(v.duration)}</td></tr>`; }).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
+  ${rows.map(v => `<tr>${tick(v.id, "Mark complete")}
+    <td style="width:136px"><a class="play" data-p="${v.i}"><img class="thumb" loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt=""><span class="pbtn">▶</span></a></td>
+    <td class="vt"><span class="idx">${v.i + 1}.</span><a class="play" data-p="${v.i}">${esc(v.title)}</a>${v.section ? `<div class="mute" style="font-size:12px">${esc(v.section)}</div>` : ""}</td><td class="dur">${dur(v.duration)}</td></tr>`).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
   </tbody></table>`;
 }
 
