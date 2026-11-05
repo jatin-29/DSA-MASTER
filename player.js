@@ -22,14 +22,14 @@ const Player = (() => {
     document.addEventListener("keydown", e => { if ($("#pl").hidden || /input|textarea/i.test(e.target.tagName)) return;
       if (e.key === "Escape") close(); if (e.key === "n" || e.key === "N") go(i + 1); if (e.key === "p" || e.key === "P") go(i - 1); });
   }
-  const toggle = k => { done[k] ? delete done[k] : done[k] = 1; put("dm_done", done); };
+  const toggle = k => toggleDone(k);
   function paint() {
-    const v = Q[i], d = !!done[v.key];
+    const v = Q[i], d = isD(v.key);
     $("#pl-ctx").textContent = ctx; $("#pl-title").textContent = v.title; $("#pl-sub").textContent = `${i + 1} / ${Q.length}${v.section ? " · " + v.section : ""}`;
     $("#pl-done").textContent = d ? "✓ Completed" : "Mark complete"; $("#pl-done").className = d ? "ok" : "";
     $("#pl-prev").disabled = i === 0; $("#pl-next").disabled = i === Q.length - 1;
-    $("#pl-list").innerHTML = Q.map((x, n) => `<div class="pl-item ${n === i ? "on" : ""} ${done[x.key] ? "dn" : ""}" data-n="${n}">
-      <img loading="lazy" src="https://i.ytimg.com/vi/${esc(x.vid)}/mqdefault.jpg" alt=""><div><span>${done[x.key] ? "✓ " : ""}${n + 1}. ${esc(x.title)}</span>${x.dur ? `<small class="mute">${esc(x.dur)}</small>` : ""}</div></div>`).join("");
+    $("#pl-list").innerHTML = Q.map((x, n) => `<div class="pl-item ${n === i ? "on" : ""} ${isD(x.key) ? "dn" : ""}" data-n="${n}">
+      <img loading="lazy" src="https://i.ytimg.com/vi/${esc(x.vid)}/mqdefault.jpg" alt=""><div><span>${isD(x.key) ? "✓ " : ""}${n + 1}. ${esc(x.title)}</span>${x.dur ? `<small class="mute">${esc(x.dur)}</small>` : ""}</div></div>`).join("");
     $("#pl-list").querySelectorAll(".pl-item").forEach(el => el.onclick = () => go(+el.dataset.n));
     const on = $("#pl-list .on"); if (on) on.scrollIntoView({ block: "nearest" });
   }
@@ -39,7 +39,7 @@ const Player = (() => {
     if (yt && yt.loadVideoById) return yt.loadVideoById({ videoId: v.vid, startSeconds: v.start || 0 });
     yt = new YT.Player("pl-yt", { host: "https://www.youtube-nocookie.com", videoId: v.vid, playerVars: vars,
       events: { onStateChange: e => { if (e.data === YT.PlayerState.ENDED && $("#pl-autonext").checked) {
-        if (!done[Q[i].key]) toggle(Q[i].key); i < Q.length - 1 ? go(i + 1) : paint(); } } } });
+        if (!isD(Q[i].key)) toggle(Q[i].key); i < Q.length - 1 ? go(i + 1) : paint(); } } } });
   }
   function open(queue, start, title) {
     Q = queue.filter(x => x.vid); if (!Q.length) return; shell(); ctx = title || "";
