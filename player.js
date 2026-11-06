@@ -14,7 +14,8 @@ const Player = (() => {
       <div class="pl-main"><div class="pl-left"><div class="pl-frame"><div id="pl-yt"></div></div>
         <div class="pl-bar"><div><div class="pl-title" id="pl-title"></div><div class="mute" id="pl-sub"></div></div>
           <div class="pl-btns"><button id="pl-prev">◀ Prev</button><button id="pl-done"></button><button id="pl-next" class="pri">Next ▶</button></div></div>
-        <label class="pl-auto mute"><input type="checkbox" id="pl-autonext"> Auto-play next & mark complete when a video ends</label></div>
+        <label class="pl-auto mute"><input type="checkbox" id="pl-autonext"> Auto-play next & mark complete when a video ends</label>
+        <div id="pl-probs"></div></div>
       <div class="pl-list" id="pl-list"></div></div></div>`);
     $("#pl-x").onclick = close; $("#pl-prev").onclick = () => go(i - 1); $("#pl-next").onclick = () => go(i + 1);
     $("#pl-done").onclick = () => { toggle(Q[i].key); paint(); };
@@ -28,8 +29,13 @@ const Player = (() => {
     $("#pl-ctx").textContent = ctx; $("#pl-title").textContent = v.title; $("#pl-sub").textContent = `${i + 1} / ${Q.length}${v.section ? " · " + v.section : ""}`;
     $("#pl-done").textContent = d ? "✓ Completed" : "Mark complete"; $("#pl-done").className = d ? "ok" : "";
     $("#pl-prev").disabled = i === 0; $("#pl-next").disabled = i === Q.length - 1;
+    const pr = PROBS[v.vid] || [];
+    $("#pl-probs").innerHTML = pr.length ? `<div class="pl-pr"><div class="ph"><b>📝 Practice problems from this video</b><span class="mute">${pr.filter(x => isD("p:" + x.url)).length}/${pr.length} solved</span></div>
+      <table><tbody>${pr.map(x => `<tr><td class="st"><button class="tick ${isD("p:" + x.url) ? "on" : ""}" data-pk="${esc("p:" + x.url)}" title="Mark solved">✓</button></td>
+        <td class="vt"><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></td><td class="ic"><a class="lnk ${x.platform === "GFG" ? "gfg" : x.platform === "LeetCode" ? "lc" : ""}" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.platform)} ↗</a></td></tr>`).join("")}</tbody></table></div>` : "";
+    $("#pl-probs").querySelectorAll("[data-pk]").forEach(b => b.onclick = () => { toggleDone(b.dataset.pk); paint(); });
     $("#pl-list").innerHTML = Q.map((x, n) => `<div class="pl-item ${n === i ? "on" : ""} ${isD(x.key) ? "dn" : ""}" data-n="${n}">
-      <img loading="lazy" src="https://i.ytimg.com/vi/${esc(x.vid)}/mqdefault.jpg" alt=""><div><span>${isD(x.key) ? "✓ " : ""}${n + 1}. ${esc(x.title)}</span>${x.dur ? `<small class="mute">${esc(x.dur)}</small>` : ""}</div></div>`).join("");
+      <img loading="lazy" src="https://i.ytimg.com/vi/${esc(x.vid)}/mqdefault.jpg" alt=""><div><span>${isD(x.key) ? "✓ " : ""}${n + 1}. ${esc(x.title)}</span>${(PROBS[x.vid] || []).length ? `<small class="pchip">📝 ${PROBS[x.vid].length} problems</small>` : ""}${x.dur ? `<small class="mute">${esc(x.dur)}</small>` : ""}</div></div>`).join("");
     $("#pl-list").querySelectorAll(".pl-item").forEach(el => el.onclick = () => go(+el.dataset.n));
     const on = $("#pl-list .on"); if (on) on.scrollIntoView({ block: "nearest" });
   }

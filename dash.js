@@ -93,6 +93,7 @@ const Dash = (() => {
       <div class="panel kpi"><span class="mute">Videos watched</span><b>${dv}<small class="mute"> / ${totV.length}</small></b>${bar(dv, totV.length, "#5ca7ff")}</div>
       <div class="panel kpi"><span class="mute">Today</span><b>${t.q} Q · ${t.v} V</b><small class="mute">Goal ${g.q} Q · ${g.v} V</small></div>
     </div>
+    <div class="panel"><div class="ph"><b>🎖️ Recent badges</b><a class="lnk sm" data-go="ach">View all →</a></div><div class="strip">${self.Ach ? Ach.strip() : ""}</div></div>
     <div class="panel"><div class="ph"><b>Activity</b><span class="mute">Last 12 months · counts questions & videos you completed</span></div><div class="heatwrap">${heatmap(a)}</div></div>
     <div class="dcols">
       <div class="panel"><div class="ph"><b>🎯 Daily goal</b><span class="mute sm" id="g-saved"></span></div>

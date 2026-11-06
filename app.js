@@ -5,7 +5,8 @@ const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch
 // done[key] = completion timestamp (>0) or -timestamp when un-ticked (kept so devices can merge).
 const isD = k => (done[k] || 0) > 0;
 let videoIds = new Set();
-function toggleDone(k) { const now = Date.now(); done[k] = isD(k) ? -now : now; put("dm_done", done); if (self.Sync) Sync.push(); }
+let PROBS = {};
+function toggleDone(k) { const now = Date.now(); done[k] = isD(k) ? -now : now; put("dm_done", done); if (self.Sync) Sync.push(); if (self.Ach && done[k] > 0) Ach.check(); }
 const dur = s => s ? (s >= 3600 ? Math.floor(s / 3600) + ":" : "") + String(Math.floor(s % 3600 / 60)).padStart(s >= 3600 ? 2 : 1, "0") + ":" + String(s % 60).padStart(2, "0") : "";
 const DIFF = { basic: ["Basic", "#8a8a8a"], easy: ["Easy", "#00b8a3"], medium: ["Medium", "#ffc01e"], hard: ["Hard", "#ff375f"] };
 let done = get("dm_done") || {}, openT = get("dm_open") || {}, sheets = [], lists = [], cur = get("dm_tab"), filt = "all", q = "";
@@ -25,17 +26,18 @@ const tick = (id, t) => `<td class="st"><button class="tick ${isD(id) ? "on" : "
 const A = (u, inner, cls = "") => `<a ${cls ? `class="${cls}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${inner}</a>`;
 
 function render() {
-  const all = [{ id: "viz", title: "Visualizer" }, ...sheets, ...lists, { id: "home", title: "Dashboard" }];
+  const all = [{ id: "viz", title: "Visualizer" }, ...sheets, ...lists, { id: "home", title: "Dashboard" }, { id: "ach", title: "Achievements" }];
   if (!all.find(x => x.id === cur)) cur = "home";
   const prog = items => { const n = items.length, d = items.filter(x => isD(x.id)).length; return n ? `<small>${pct(d, n)}%</small>` : ""; };
   const link = (l, icon, items) => `<a data-id="${esc(l.id)}" class="${l.id === cur ? "on" : ""}"><span class="ico">${icon}</span><span class="lbl">${esc(l.title)}</span>${items ? prog(items) : ""}</a>`;
-  $("#tabs").innerHTML = `<div id="sync-box"></div><div class="grp">Home</div>${link({ id: "home", title: "Dashboard" }, "🏠")}<div class="grp">Tools</div>${link(all[0], "⚡")}
+  $("#tabs").innerHTML = `<div id="sync-box"></div><div class="grp">Home</div>${link({ id: "home", title: "Dashboard" }, "🏠")}${link({ id: "ach", title: "Achievements" }, "🏆")}<div class="grp">Tools</div>${link(all[0], "⚡")}
     ${sheets.length ? `<div class="grp">DSA Sheets</div>` + sheets.map(s => link(s, "📋", s.topics.flatMap(t => t.subs.flatMap(x => x.qs)))).join("") : ""}
     ${lists.length ? `<div class="grp">Video Courses</div>` + lists.map(l => link(l, "▶", l.videos)).join("") : ""}`;
   $("#tabs").querySelectorAll("a").forEach(a => a.onclick = () => { cur = a.dataset.id; put("dm_tab", cur); q = ""; filt = "all"; document.body.classList.remove("open"); render(); scrollTo(0, 0); });
   if (self.Sync) Sync.paint();
   V.stop(); if (cur === "viz") return V.render();
   if (cur === "home") return Dash.render();
+  if (cur === "ach") return Ach.render();
   const S = sheets.find(x => x.id === cur);
   S ? renderSheet(S) : renderPlaylist(lists.find(l => l.id === cur));
   const qi = $("#q");
@@ -87,12 +89,13 @@ function renderPlaylist(L) {
   <table><thead><tr><th>Status</th><th></th><th>Title</th><th>Duration</th></tr></thead><tbody>
   ${rows.map(v => `<tr>${tick(v.id, "Mark complete")}
     <td style="width:136px"><a class="play" data-p="${v.i}"><img class="thumb" loading="lazy" src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt=""><span class="pbtn">▶</span></a></td>
-    <td class="vt"><span class="idx">${v.i + 1}.</span><a class="play" data-p="${v.i}">${esc(v.title)}</a>${v.section ? `<div class="mute" style="font-size:12px">${esc(v.section)}</div>` : ""}</td><td class="dur">${dur(v.duration)}</td></tr>`).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
+    <td class="vt"><span class="idx">${v.i + 1}.</span><a class="play" data-p="${v.i}">${esc(v.title)}</a>${v.section ? `<div class="mute" style="font-size:12px">${esc(v.section)}</div>` : ""}</td><td class="dur">${PROBS[v.id] ? `<span class="pchip" title="Practice problems in this video">📝 ${PROBS[v.id].length}</span>` : ""}${dur(v.duration)}</td></tr>`).join("") || `<tr><td colspan="4" class="mute">No videos</td></tr>`}
   </tbody></table>`;
 }
 
 const load = f => fetch(f).then(r => r.ok ? r.json() : []).catch(() => []);
-Promise.all([load("sheets.json"), load("videos.json"), load("data/extra.json")]).then(([s, v, x]) => {
+Promise.all([load("sheets.json"), load("videos.json"), load("data/extra.json"), load("problems.json")]).then(([s, v, x, pr]) => {
+  PROBS = Array.isArray(pr) ? {} : pr;
   sheets = [...s, ...(x.sheets || [])]; lists = [...v, ...(x.lists || [])];
   videoIds = new Set(lists.flatMap(l => l.videos.map(v => v.id)));
   render();
