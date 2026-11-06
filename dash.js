@@ -95,13 +95,12 @@ const Dash = (() => {
     </div>
     <div class="panel"><div class="ph"><b>Activity</b><span class="mute">Last 12 months · counts questions & videos you completed</span></div><div class="heatwrap">${heatmap(a)}</div></div>
     <div class="dcols">
-      <div class="panel"><div class="ph"><b>🎯 Daily goal</b><button class="chip" id="g-edit">Edit</button></div>
-        <div id="g-form" hidden class="gform">
-          <label>Questions / day <input type="number" min="0" max="50" id="g-q" value="${g.q}"></label>
-          <label>Videos / day <input type="number" min="0" max="20" id="g-v" value="${g.v}"></label>
+      <div class="panel"><div class="ph"><b>🎯 Daily goal</b><span class="mute sm" id="g-saved"></span></div>
+        <div class="gform">
+          <div class="gnum"><span>Questions / day</span><div><button data-step="q:-1">−</button><b id="g-q">${g.q}</b><button data-step="q:1">+</button></div></div>
+          <div class="gnum"><span>Videos / day</span><div><button data-step="v:-1">−</button><b id="g-v">${g.v}</b><button data-step="v:1">+</button></div></div>
           <label>From sheet <select id="g-s">${sheets.map(x => `<option value="${esc(x.id)}" ${x.id === g.sheet ? "selected" : ""}>${esc(x.title)}</option>`).join("")}</select></label>
-          <label>From course <select id="g-l">${lists.map(x => `<option value="${esc(x.id)}" ${x.id === g.list ? "selected" : ""}>${esc(x.title)}</option>`).join("")}</select></label>
-          <button class="go" id="g-save">Save</button></div>
+          <label>From course <select id="g-l">${lists.map(x => `<option value="${esc(x.id)}" ${x.id === g.list ? "selected" : ""}>${esc(x.title)}</option>`).join("")}</select></label></div>
         <div class="gp"><span>Questions</span><span class="mute">${Math.min(t.q, g.q)}/${g.q}</span></div>${bar(t.q, g.q || 1)}
         <div class="gp"><span>Videos</span><span class="mute">${Math.min(t.v, g.v)}/${g.v}</span></div>${bar(t.v, g.v || 1, "#5ca7ff")}
         <div class="lbl2">Today's plan</div>
@@ -121,8 +120,11 @@ const Dash = (() => {
     $("#view").querySelectorAll(".tick").forEach(b => b.onclick = () => { toggleDone(b.dataset.v); render(); });
     $("#view").querySelectorAll("[data-go]").forEach(el => el.onclick = () => go(el.dataset.go));
     $("#view").querySelectorAll("[data-pv]").forEach(el => el.onclick = () => Player.open(L.videos.map(v => ({ key: v.id, vid: v.id, title: v.title, section: v.section, dur: dur(v.duration) })), +el.dataset.pv, L.title));
-    $("#g-edit").onclick = () => $("#g-form").hidden = !$("#g-form").hidden;
-    $("#g-save").onclick = () => { if (self.Sync) Sync.settingsTouched(); put("dm_goal", { q: +$("#g-q").value || 0, v: +$("#g-v").value || 0, sheet: $("#g-s").value, list: $("#g-l").value }); if (self.Sync) Sync.push(); render(); };
+    const saveGoal = ng => { if (self.Sync) Sync.settingsTouched(); put("dm_goal", ng); if (self.Sync) Sync.push(); render(); const m = $("#g-saved"); if (m) m.textContent = "Saved ✓"; };
+    $("#view").querySelectorAll("[data-step]").forEach(btn => btn.onclick = () => { const [k, d] = btn.dataset.step.split(":"), ng = goal();
+      ng[k] = Math.max(0, Math.min(k === "q" ? 50 : 20, ng[k] + +d)); saveGoal(ng); });
+    $("#g-s").onchange = e => saveGoal({ ...goal(), sheet: e.target.value });
+    $("#g-l").onchange = e => saveGoal({ ...goal(), list: e.target.value });
     $("#p-go").onclick = async () => { if (self.Sync) Sync.settingsTouched(); put("dm_handles", { cf: $("#p-cf").value.trim(), lc: $("#p-lc").value.trim() }); if (self.Sync) Sync.push();
       $("#p-out").innerHTML = `<span class="mute">Loading… (LeetCode can take ~30s)</span>`; $("#p-out").innerHTML = profile(await fetchProfiles()); };
     loadContests().then(cs => { const el = $("#c-list"); if (!el) return;
