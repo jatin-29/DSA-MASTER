@@ -2,7 +2,8 @@
 # { videoId: [{title, url, platform}] }. Descriptions are cached in ~/.dsa-cache (actions/cache) between runs.
 import json, os, re, sys, time
 from concurrent.futures import ThreadPoolExecutor
-import yt_dlp
+import urllib.request, urllib.parse
+KEY = os.environ.get("YT_API_KEY", "").strip()
 
 CACHE = os.path.expanduser("~/.dsa-cache/desc.json")
 os.makedirs(os.path.dirname(CACHE), exist_ok=True)
@@ -12,20 +13,21 @@ for f in ("videos.json", "data/extra.json"):
     if not os.path.exists(f): continue
     d = json.load(open(f)); lists = d if isinstance(d, list) else d.get("lists", [])
     ids += [v["id"] for l in lists for v in l["videos"]]
-todo = [i for i in dict.fromkeys(ids) if i not in cache][:400]
+todo = [i for i in dict.fromkeys(ids) if i not in cache]
 print(f"descriptions: {len(ids)} videos, {len(cache)} cached, fetching {len(todo)}")
 
-def desc(vid):
+# Official YouTube Data API v3 (videos.list, 50 ids per call, 1 quota unit each).
+if not KEY:
+    print("YT_API_KEY secret not set - skipping description fetch")
+    todo = []
+for i in range(0, len(todo), 50):
+    chunk = todo[i:i + 50]
     try:
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True, "extract_flat": False}) as y:
-            return vid, (y.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False) or {}).get("description") or ""
+        url = "https://www.googleapis.com/youtube/v3/videos?" + urllib.parse.urlencode({"part": "snippet", "id": ",".join(chunk), "key": KEY, "maxResults": 50})
+        for it in json.load(urllib.request.urlopen(url, timeout=30)).get("items", []):
+            cache[it["id"]] = it["snippet"].get("description", "")
     except Exception as e:
-        return vid, None
-start = time.time()
-with ThreadPoolExecutor(6) as ex:
-    for vid, d in ex.map(desc, todo):
-        if d is not None: cache[vid] = d
-        if time.time() - start > 900: break
+        print("YouTube API error:", getattr(e, "code", ""), str(e)[:200], file=sys.stderr); break
 json.dump(cache, open(CACHE, "w"))
 
 SITES = [("leetcode.com/problems", "LeetCode"), ("geeksforgeeks.org/problems", "GFG"), ("geeksforgeeks.org", "GFG"), ("codeforces.com", "Codeforces"),
