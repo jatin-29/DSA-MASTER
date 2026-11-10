@@ -5,7 +5,11 @@ const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch
 // done[key] = completion timestamp (>0) or -timestamp when un-ticked (kept so devices can merge).
 const isD = k => (done[k] || 0) > 0;
 let videoIds = new Set();
-let PROBS = {};
+let PROBS = {}; const openSol = new Set();
+// tiny SQL highlighter: keywords, strings, comments
+const SQLK = /\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|ON|JOIN|INNER|LEFT|RIGHT|FULL|OUTER|CROSS|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|DISTINCT|UNION|ALL|ANY|INTERSECT|EXISTS|CASE|WHEN|THEN|ELSE|END|WITH|RECURSIVE|OVER|PARTITION|ROWS|BETWEEN|PRECEDING|CURRENT|ROW|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|ALTER|ADD|DROP|COLUMN|RENAME|TO|LIKE|ASC|DESC|INTERVAL|DAY|MONTH|YEAR|INDEX|FULLTEXT|MATCH|AGAINST|USING)\b/g;
+const hl = code => esc(code).split("\n").map(l => { const i = l.indexOf("--"), c = i >= 0 ? l.slice(i) : "", b = i >= 0 ? l.slice(0, i) : l;
+  return b.replace(/('[^']*')/g, "\u0001$1\u0002").replace(SQLK, '<b class="k">$1</b>').replace(/\u0001(.*?)\u0002/g, '<i class="s">$1</i>') + (c ? `<i class="c">${c}</i>` : ""); }).join("\n");
 function toggleDone(k) { const now = Date.now(); done[k] = isD(k) ? -now : now; put("dm_done", done); if (self.Sync) Sync.push(); if (self.Ach && done[k] > 0) Ach.check(); }
 const dur = s => s ? (s >= 3600 ? Math.floor(s / 3600) + ":" : "") + String(Math.floor(s % 3600 / 60)).padStart(s >= 3600 ? 2 : 1, "0") + ":" + String(s % 60).padStart(2, "0") : "";
 const DIFF = { basic: ["Basic", "#8a8a8a"], easy: ["Easy", "#00b8a3"], medium: ["Medium", "#ffc01e"], hard: ["Hard", "#ff375f"] };
@@ -51,6 +55,9 @@ function bindList() {
   if (qi) qi.oninput = () => { q = qi.value.toLowerCase(); render(); const n = $("#q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
   $("#view").querySelectorAll(".chip[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
   $("#view").querySelectorAll(".tick").forEach(b => b.onclick = () => { toggleDone(b.dataset.v); render(); });
+  $("#view").querySelectorAll("[data-sol]").forEach(b => b.onclick = () => { const k = b.dataset.sol; openSol.has(k) ? openSol.delete(k) : openSol.add(k); render(); });
+  $("#view").querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { const x = S.topics.flatMap(t => t.subs.flatMap(s => s.qs)).find(y => y.id === b.dataset.copy);
+    navigator.clipboard.writeText(x.solution).then(() => b.textContent = "✓ Copied", () => {}); });
   if (S) $("#view").querySelectorAll("[data-q]").forEach(a => a.onclick = () => {
     const qs = S.topics.flatMap(t => t.subs.flatMap(s => s.qs.map(x => ({ ...x, section: t.name })))).filter(x => Player.ytId(x.video));
     Player.open(qs.map(x => ({ key: x.id, vid: Player.ytId(x.video), start: Player.ytStart(x.video), title: x.title, section: x.section })), qs.findIndex(x => x.id === a.dataset.q), S.title); });
@@ -65,7 +72,8 @@ function renderSheet(S) {
   let h = `<div class="top"><div class="panel stat">${ring(p)}<div><div class="big">${esc(S.title)}</div>
     <div class="mute">${n} problems · ${S.topics.length} steps${S.link ? " · " + A(S.link, "Original ↗", "lnk") : ""}</div>
     <div class="bar"><i style="width:${p}%"></i></div><div class="mute" style="margin-top:6px"><b style="color:var(--green)">${d}</b> solved · <b style="color:var(--yellow)">${n - d}</b> remaining</div></div></div>
-    <div class="panel diffs">${Object.entries(DIFF).map(([k, [l, c]]) => { const [a, b] = by(k); return `<div class="dpill"><span style="color:${c}">${l}</span><b>${a}<span class="mute">/${b}</span></b></div>`; }).join("")}</div></div>
+    <div class="panel diffs">${Object.entries(DIFF).map(([k, [l, c]]) => { const [a, b] = by(k); return !b ? "" : `<div class="dpill"><span style="color:${c}">${l}</span><b>${a}<span class="mute">/${b}</span></b></div>`; }).join("")}</div></div>
+    ${S.schema ? `<details class="panel schema"><summary>🗂️ Sample tables used in the solutions (MySQL 8)</summary><pre><code>${esc(S.schema)}</code></pre></details>` : ""}
     ${filters("Search problems")}`;
   const filtering = q || filt !== "all";
   S.topics.forEach((t, ti) => {
@@ -76,7 +84,8 @@ function renderSheet(S) {
         const [l, c] = DIFF[(x.difficulty || "").toLowerCase()] || ["—", "var(--mute)"];
         return `<tr>${tick(x.id, "Mark solved")}<td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}${x.tags && x.tags.length ? `<div class="tags">${x.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</td>
           <td class="df" style="color:${c}">${l}</td><td class="ic lk">${x.url ? A(x.url, esc(x.platform === "tuf" ? "TUF" : x.platform || "Solve"), "lnk") : ""}${x.links ? [["gfg", "GFG"], ["lc", "LeetCode"], ["cs", "Ninjas"]].filter(([k]) => x.links[k] && !(x.url || "").includes(x.links[k].split("/")[2])).map(([k, l]) => A(x.links[k], l, "lnk " + k)).join("") : ""}</td>
-          <td class="ic">${x.video && Player.ytId(x.video) ? `<a class="yt play" data-q="${esc(x.id)}" title="Watch here">▶</a>` : x.video ? A(x.video, "▶", "yt") : ""}</td></tr>`; }).join("")}</tbody></table>`; }).join("");
+          <td class="ic">${x.solution ? `<button class="solbtn ${openSol.has(x.id) ? "on" : ""}" data-sol="${esc(x.id)}">💡 Solution</button>` : x.video && Player.ytId(x.video) ? `<a class="yt play" data-q="${esc(x.id)}" title="Watch here">▶</a>` : x.video ? A(x.video, "▶", "yt") : ""}</td></tr>
+          ${x.solution && openSol.has(x.id) ? `<tr class="solrow"><td></td><td colspan="4"><div class="sol"><button class="chip copy" data-copy="${esc(x.id)}">📋 Copy</button><pre><code>${hl(x.solution)}</code></pre></div></td></tr>` : ""}`; }).join("")}</tbody></table>`; }).join("");
     if (filtering && !body) return;
     h += `<details class="topic" data-k="${esc(key)}" ${filtering || openT[key] ? "open" : ""}><summary><span>${esc(t.name)}</span>
       <span class="tp"><span class="bar sm"><i style="width:${pct(td, tq.length)}%"></i></span>${td}/${tq.length}</span></summary>${body}</details>`;
