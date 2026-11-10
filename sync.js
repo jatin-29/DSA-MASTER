@@ -3,7 +3,7 @@ self.Sync = (() => {
   const V = "10.12.2", SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}-compat.js`;
   let auth = null, db = null, user = null, status = "", timer = null, unsub = null, ready = false;
   const load = src => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-  const state = () => ({ done, badges: get("dm_badges") || {}, goal: get("dm_goal") || null, handles: get("dm_handles") || null, settingsAt: get("dm_settings_at") || 0 });
+  const state = () => ({ done, badges: get("dm_badges") || {}, courses: get("dm_courses") || null, coursesAt: get("dm_courses_at") || 0, goal: get("dm_goal") || null, handles: get("dm_handles") || null, settingsAt: get("dm_settings_at") || 0 });
 
   function merge(remote) {
     let changed = false;
@@ -11,10 +11,11 @@ self.Sync = (() => {
     const bg = get("dm_badges") || {}; let bc = false;
     for (const [k, t] of Object.entries(remote.badges || {})) if (!bg[k] || t < bg[k]) { bg[k] = t; bc = true; }
     if (bc) { put("dm_badges", bg); changed = true; }
+    if (remote.courses && (remote.coursesAt || 0) > (get("dm_courses_at") || 0)) { put("dm_courses", remote.courses); put("dm_courses_at", remote.coursesAt); if (self.MC) MC.refreshIds(); changed = true; }
     if ((remote.settingsAt || 0) > (get("dm_settings_at") || 0)) {
       if (remote.goal) put("dm_goal", remote.goal); if (remote.handles) put("dm_handles", remote.handles); put("dm_settings_at", remote.settingsAt); changed = true; }
     if (changed) { put("dm_done", done); render(); }
-    const remoteHasAll = Object.entries(done).every(([k, t]) => Math.abs(remote.done?.[k] || 0) >= Math.abs(t)) && (remote.settingsAt || 0) >= (get("dm_settings_at") || 0) && Object.keys(get("dm_badges") || {}).every(k => remote.badges && remote.badges[k]);
+    const remoteHasAll = Object.entries(done).every(([k, t]) => Math.abs(remote.done?.[k] || 0) >= Math.abs(t)) && (remote.settingsAt || 0) >= (get("dm_settings_at") || 0) && Object.keys(get("dm_badges") || {}).every(k => remote.badges && remote.badges[k]) && (remote.coursesAt || 0) >= (get("dm_courses_at") || 0);
     if (!remoteHasAll) push(true);
   }
   function push(now) {

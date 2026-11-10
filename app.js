@@ -27,22 +27,29 @@ const A = (u, inner, cls = "") => `<a ${cls ? `class="${cls}"` : ""} href="${esc
 
 function render() {
   const all = [{ id: "viz", title: "Visualizer" }, ...sheets, ...lists, { id: "home", title: "Dashboard" }, { id: "ach", title: "Achievements" }];
-  if (!all.find(x => x.id === cur)) cur = "home";
+  const mcs = MC.all();
+  if (!all.find(x => x.id === cur) && !(cur || "").startsWith("mc:")) cur = "home";
   const prog = items => { const n = items.length, d = items.filter(x => isD(x.id)).length; return n ? `<small>${pct(d, n)}%</small>` : ""; };
   const link = (l, icon, items) => `<a data-id="${esc(l.id)}" class="${l.id === cur ? "on" : ""}"><span class="ico">${icon}</span><span class="lbl">${esc(l.title)}</span>${items ? prog(items) : ""}</a>`;
   $("#tabs").innerHTML = `<div id="sync-box"></div><div class="grp">Home</div>${link({ id: "home", title: "Dashboard" }, "🏠")}${link({ id: "ach", title: "Achievements" }, "🏆")}<div class="grp">Tools</div>${link(all[0], "⚡")}
     ${sheets.length ? `<div class="grp">DSA Sheets</div>` + sheets.map(s => link(s, "📋", s.topics.flatMap(t => t.subs.flatMap(x => x.qs)))).join("") : ""}
-    ${lists.length ? `<div class="grp">Video Courses</div>` + lists.map(l => link(l, "▶", l.videos)).join("") : ""}`;
-  $("#tabs").querySelectorAll("a").forEach(a => a.onclick = () => { cur = a.dataset.id; put("dm_tab", cur); q = ""; filt = "all"; document.body.classList.remove("open"); render(); scrollTo(0, 0); });
+    ${lists.length ? `<div class="grp">Video Courses</div>` + lists.map(l => link(l, "▶", l.videos)).join("") : ""}
+    <div class="grp">My Courses 🔒</div>${mcs.map(c => link({ id: "mc:" + c.id, title: c.title }, "🔒", c.items.map(it => ({ id: MC.key(c, it) })))).join("")}<a id="mc-add"><span class="ico">＋</span><span class="lbl">Add course</span></a>`;
+  $("#mc-add").onclick = () => MC.add();
+  $("#tabs").querySelectorAll("a[data-id]").forEach(a => a.onclick = () => { cur = a.dataset.id; put("dm_tab", cur); q = ""; filt = "all"; document.body.classList.remove("open"); render(); scrollTo(0, 0); });
   if (self.Sync) Sync.paint();
   V.stop(); if (cur === "viz") return V.render();
   if (cur === "home") return Dash.render();
   if (cur === "ach") return Ach.render();
+  if (cur.startsWith("mc:")) { MC.render(cur.slice(3)); return bindList(); }
   const S = sheets.find(x => x.id === cur);
   S ? renderSheet(S) : renderPlaylist(lists.find(l => l.id === cur));
-  const qi = $("#q");
-  qi.oninput = () => { q = qi.value.toLowerCase(); render(); const n = $("#q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
-  $("#view").querySelectorAll(".chip").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
+  bindList();
+}
+function bindList() {
+  const S = sheets.find(x => x.id === cur), qi = $("#q");
+  if (qi) qi.oninput = () => { q = qi.value.toLowerCase(); render(); const n = $("#q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+  $("#view").querySelectorAll(".chip[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
   $("#view").querySelectorAll(".tick").forEach(b => b.onclick = () => { toggleDone(b.dataset.v); render(); });
   if (S) $("#view").querySelectorAll("[data-q]").forEach(a => a.onclick = () => {
     const qs = S.topics.flatMap(t => t.subs.flatMap(s => s.qs.map(x => ({ ...x, section: t.name })))).filter(x => Player.ytId(x.video));
@@ -97,7 +104,7 @@ const load = f => fetch(f).then(r => r.ok ? r.json() : []).catch(() => []);
 Promise.all([load("sheets.json"), load("videos.json"), load("data/extra.json"), load("problems.json")]).then(([s, v, x, pr]) => {
   PROBS = Array.isArray(pr) ? {} : pr;
   sheets = [...s, ...(x.sheets || [])]; lists = [...v, ...(x.lists || [])];
-  videoIds = new Set(lists.flatMap(l => l.videos.map(v => v.id)));
+  videoIds = new Set(lists.flatMap(l => l.videos.map(v => v.id))); MC.refreshIds();
   render();
 });
 

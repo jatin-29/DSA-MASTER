@@ -8,6 +8,7 @@ self.Ach = (() => {
     const m = {};
     sheets.forEach(S => S.topics.forEach(t => t.subs.forEach(s => s.qs.forEach(q => m[q.id] = { type: "q", title: q.title, diff: (q.difficulty || "").toLowerCase(), res: S.title, sheet: S.id, step: t.name }))));
     lists.forEach(L => L.videos.forEach(v => m[v.id] = { type: "v", title: v.title, res: L.title, dur: v.duration || 0 }));
+    if (self.MC) MC.all().forEach(c => c.items.forEach(it => m[MC.key(c, it)] = { type: "v", title: it.title, res: c.title }));
     return m;
   }
   const events = idx => Object.entries(done).filter(([, t]) => t > 1e12).map(([k, t]) => ({ k, t, ...(idx[k] || { type: k.startsWith("p:") ? "q" : "q", title: k, res: "Video practice" }) })).sort((a, b) => a.t - b.t);
