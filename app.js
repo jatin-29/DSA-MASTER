@@ -10,9 +10,15 @@ let PROBS = {}; const openSol = new Set();
 const SQLK = /\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|AS|ON|JOIN|INNER|LEFT|RIGHT|FULL|OUTER|CROSS|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|DISTINCT|UNION|ALL|ANY|INTERSECT|EXISTS|CASE|WHEN|THEN|ELSE|END|WITH|RECURSIVE|OVER|PARTITION|ROWS|BETWEEN|PRECEDING|CURRENT|ROW|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|ALTER|ADD|DROP|COLUMN|RENAME|TO|LIKE|ASC|DESC|INTERVAL|DAY|MONTH|YEAR|INDEX|FULLTEXT|MATCH|AGAINST|USING)\b/g;
 const hl = code => esc(code).split("\n").map(l => { const i = l.indexOf("--"), c = i >= 0 ? l.slice(i) : "", b = i >= 0 ? l.slice(0, i) : l;
   return b.replace(/('[^']*')/g, "\u0001$1\u0002").replace(SQLK, '<b class="k">$1</b>').replace(/\u0001(.*?)\u0002/g, '<i class="s">$1</i>') + (c ? `<i class="c">${c}</i>` : ""); }).join("\n");
+// stars[key] = timestamp (>0 starred, <0 un-starred); revised[key] = last revision timestamp
+const isS = k => (stars[k] || 0) > 0;
+function toggleStar(k) { const now = Date.now(); stars[k] = isS(k) ? -now : now; put("dm_stars", stars); if (self.Sync) Sync.push(); }
+function markRevised(k) { revised[k] = Date.now(); put("dm_revised", revised); if (self.Sync) Sync.push(); }
+const star = id => `<button class="star ${isS(id) ? "on" : ""}" data-star="${esc(id)}" title="${isS(id) ? "Remove from revision list" : "Star for revision"}">${isS(id) ? "★" : "☆"}</button>`;
 function toggleDone(k) { const now = Date.now(); done[k] = isD(k) ? -now : now; put("dm_done", done); if (self.Sync) Sync.push(); if (self.Ach && done[k] > 0) Ach.check(); }
 const dur = s => s ? (s >= 3600 ? Math.floor(s / 3600) + ":" : "") + String(Math.floor(s % 3600 / 60)).padStart(s >= 3600 ? 2 : 1, "0") + ":" + String(s % 60).padStart(2, "0") : "";
 const DIFF = { basic: ["Basic", "#8a8a8a"], easy: ["Easy", "#00b8a3"], medium: ["Medium", "#ffc01e"], hard: ["Hard", "#ff375f"] };
+let stars = get("dm_stars") || {}, revised = get("dm_revised") || {};
 let done = get("dm_done") || {}, openT = get("dm_open") || {}, sheets = [], lists = [], cur = get("dm_tab"), filt = "all", q = "";
 
 function ring(p) {
@@ -22,20 +28,21 @@ function ring(p) {
   <text x="48" y="54" text-anchor="middle" fill="var(--text)" font-size="18" font-weight="600">${p}%</text></svg>`;
 }
 const pct = (d, n) => n ? Math.round(d * 100 / n) : 0;
-const filters = ph => `<div class="filters"><input id="q" placeholder="${ph}" value="${esc(q)}">
-  ${["all", "todo", "done"].map(f => `<button class="chip ${filt === f ? "on" : ""}" data-f="${f}">${{ all: "All", todo: "Pending", done: "Completed" }[f]}</button>`).join("")}</div>`;
+const filters = (ph, nStar) => `<div class="filters"><input id="q" placeholder="${ph}" value="${esc(q)}">
+  ${["all", "todo", "done", ...(nStar != null ? ["star"] : [])].map(f => `<button class="chip ${filt === f ? "on" : ""}" data-f="${f}">${{ all: "All", todo: "Pending", done: "Completed", star: `★ Starred (${nStar})` }[f]}</button>`).join("")}</div>`;
 const go = id => { cur = id; put("dm_tab", cur); q = ""; filt = "all"; render(); scrollTo(0, 0); };
-const keep = (id, title) => (filt === "all" || (filt === "done") === isD(id)) && (!q || String(title).toLowerCase().includes(q));
+const keep = (id, title) => (filt === "all" || (filt === "star" ? isS(id) : (filt === "done") === isD(id))) && (!q || String(title).toLowerCase().includes(q));
 const tick = (id, t) => `<td class="st"><button class="tick ${isD(id) ? "on" : ""}" data-v="${esc(id)}" title="${t}">✓</button></td>`;
 const A = (u, inner, cls = "") => `<a ${cls ? `class="${cls}"` : ""} href="${esc(u)}" target="_blank" rel="noopener">${inner}</a>`;
 
 function render() {
-  const all = [{ id: "viz", title: "Visualizer" }, ...sheets, ...lists, { id: "home", title: "Dashboard" }, { id: "ach", title: "Achievements" }];
+  const all = [{ id: "viz", title: "Visualizer" }, ...sheets, ...lists, { id: "home", title: "Dashboard" }, { id: "ach", title: "Achievements" }, { id: "rev", title: "Revise" }];
   const mcs = MC.all();
   if (!all.find(x => x.id === cur) && !(cur || "").startsWith("mc:")) cur = "home";
   const prog = items => { const n = items.length, d = items.filter(x => isD(x.id)).length; return n ? `<small>${pct(d, n)}%</small>` : ""; };
-  const link = (l, icon, items) => `<a data-id="${esc(l.id)}" class="${l.id === cur ? "on" : ""}"><span class="ico">${icon}</span><span class="lbl">${esc(l.title)}</span>${items ? prog(items) : ""}</a>`;
-  $("#tabs").innerHTML = `<div id="sync-box"></div><div class="grp">Home</div>${link({ id: "home", title: "Dashboard" }, "🏠")}${link({ id: "ach", title: "Achievements" }, "🏆")}<div class="grp">Tools</div>${link(all[0], "⚡")}
+  const nStars = () => sheets.reduce((a, S) => a + S.topics.reduce((b, t) => b + t.subs.reduce((c, s) => c + s.qs.filter(x => isS(x.id)).length, 0), 0), 0);
+  const link = (l, icon, items) => `<a data-id="${esc(l.id)}" class="${l.id === cur ? "on" : ""}"><span class="ico">${icon}</span><span class="lbl">${esc(l.title)}</span>${items ? prog(items) : l.id === "rev" && nStars() ? `<small>${nStars()}</small>` : ""}</a>`;
+  $("#tabs").innerHTML = `<div id="sync-box"></div><div class="grp">Home</div>${link({ id: "home", title: "Dashboard" }, "🏠")}${link({ id: "ach", title: "Achievements" }, "🏆")}${link({ id: "rev", title: "Revise" }, "★", null)}<div class="grp">Tools</div>${link(all[0], "⚡")}
     ${sheets.length ? `<div class="grp">DSA Sheets</div>` + sheets.map(s => link(s, "📋", s.topics.flatMap(t => t.subs.flatMap(x => x.qs)))).join("") : ""}
     ${lists.length ? `<div class="grp">Video Courses</div>` + lists.map(l => link(l, "▶", l.videos)).join("") : ""}
     <div class="grp">My Courses 🔒</div>${mcs.map(c => link({ id: "mc:" + c.id, title: c.title }, "🔒", c.items.map(it => ({ id: MC.key(c, it) })))).join("")}<a id="mc-add"><span class="ico">＋</span><span class="lbl">Add course</span></a>`;
@@ -45,6 +52,7 @@ function render() {
   V.stop(); if (cur === "viz") return V.render();
   if (cur === "home") return Dash.render();
   if (cur === "ach") return Ach.render();
+  if (cur === "rev") { renderRevise(); return bindList(); }
   if (cur.startsWith("mc:")) { MC.render(cur.slice(3)); return bindList(); }
   const S = sheets.find(x => x.id === cur);
   S ? renderSheet(S) : renderPlaylist(lists.find(l => l.id === cur));
@@ -55,8 +63,10 @@ function bindList() {
   if (qi) qi.oninput = () => { q = qi.value.toLowerCase(); render(); const n = $("#q"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
   $("#view").querySelectorAll(".chip[data-f]").forEach(b => b.onclick = () => { filt = b.dataset.f; render(); });
   $("#view").querySelectorAll(".tick").forEach(b => b.onclick = () => { toggleDone(b.dataset.v); render(); });
+  $("#view").querySelectorAll("[data-star]").forEach(b => b.onclick = () => { toggleStar(b.dataset.star); render(); });
+  $("#view").querySelectorAll("[data-rev]").forEach(b => b.onclick = () => { markRevised(b.dataset.rev); render(); });
   $("#view").querySelectorAll("[data-sol]").forEach(b => b.onclick = () => { const k = b.dataset.sol; openSol.has(k) ? openSol.delete(k) : openSol.add(k); render(); });
-  $("#view").querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { const x = S.topics.flatMap(t => t.subs.flatMap(s => s.qs)).find(y => y.id === b.dataset.copy);
+  $("#view").querySelectorAll("[data-copy]").forEach(b => b.onclick = () => { const x = sheets.flatMap(Z => Z.topics.flatMap(t => t.subs.flatMap(s => s.qs))).find(y => y.id === b.dataset.copy);
     navigator.clipboard.writeText(x.solution).then(() => b.textContent = "✓ Copied", () => {}); });
   if (S) $("#view").querySelectorAll("[data-q]").forEach(a => a.onclick = () => {
     const qs = S.topics.flatMap(t => t.subs.flatMap(s => s.qs.map(x => ({ ...x, section: t.name })))).filter(x => Player.ytId(x.video));
@@ -64,6 +74,24 @@ function bindList() {
   else $("#view").querySelectorAll("[data-p]").forEach(a => a.onclick = () => { const L = lists.find(l => l.id === cur);
     Player.open(L.videos.map(v => ({ key: v.id, vid: v.id, title: v.title, section: v.section, dur: dur(v.duration) })), +a.dataset.p, L.title); });
   $("#view").querySelectorAll("details.topic").forEach(el => el.ontoggle = () => { if (q || filt !== "all") return; openT[el.dataset.k] = el.open; put("dm_open", openT); });
+}
+
+function renderRevise() {
+  const ago = t => { if (!t) return "never revised"; const d = Math.floor((Date.now() - t) / 864e5); return d === 0 ? "revised today" : d === 1 ? "revised yesterday" : `revised ${d} days ago`; };
+  const groups = sheets.map(S => ({ S, qs: S.topics.flatMap(t => t.subs.flatMap(s => s.qs.map(x => ({ ...x, step: t.name })))).filter(x => isS(x.id)) })).filter(g => g.qs.length);
+  const all = groups.flatMap(g => g.qs), due = all.filter(x => !revised[x.id] || Date.now() - revised[x.id] > 7 * 864e5).length;
+  let h = `<div class="top"><div class="panel" style="flex:1"><div class="big">★ Revise</div>
+    <div class="mute">${all.length} starred question${all.length === 1 ? "" : "s"} · <b style="color:var(--yellow)">${due}</b> not revised in the last 7 days. Oldest first.</div></div></div>`;
+  if (!all.length) h += `<div class="panel empty">No starred questions yet. Tap <b class="staric">☆</b> next to any question in a sheet to add it here.</div>`;
+  else h += filters("Search starred questions") + groups.map(({ S, qs }) => {
+    const rows = qs.filter(x => keep(x.id, x.title)).sort((a, b) => (revised[a.id] || 0) - (revised[b.id] || 0)); if (!rows.length) return "";
+    return `<div class="topic mc"><div class="mch"><span>📋 ${esc(S.title)}</span><span class="tp">${qs.length} starred</span></div><table><tbody>${rows.map(x => {
+      const [l, c] = DIFF[(x.difficulty || "").toLowerCase()] || ["—", "var(--mute)"], old = !revised[x.id] || Date.now() - revised[x.id] > 7 * 864e5;
+      return `<tr>${tick(x.id, "Mark solved")}<td class="sc">${star(x.id)}</td><td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}<div class="mute sm">${esc(x.step)} · <span style="color:${old ? "var(--yellow)" : "var(--green)"}">${ago(revised[x.id])}</span></div></td>
+        <td class="df" style="color:${c}">${l}</td><td class="ic lk">${x.url ? A(x.url, esc(x.platform === "tuf" ? "TUF" : x.platform || "Solve"), "lnk") : ""}${x.links && x.links.gfg ? A(x.links.gfg, "GFG", "lnk gfg") : ""}${x.links && x.links.lc ? A(x.links.lc, "LeetCode", "lnk lc") : ""}</td>
+        <td class="ic"><button class="solbtn" data-rev="${esc(x.id)}" title="Mark as revised today">↻ Revised</button></td></tr>
+        ${x.solution ? `<tr class="solrow"><td></td><td></td><td colspan="4"><button class="solbtn ${openSol.has(x.id) ? "on" : ""}" data-sol="${esc(x.id)}">💡 Solution</button>${openSol.has(x.id) ? `<div class="sol"><button class="chip copy" data-copy="${esc(x.id)}">📋 Copy</button><pre><code>${hl(x.solution)}</code></pre></div>` : ""}</td></tr>` : ""}`; }).join("")}</tbody></table></div>`; }).join("");
+  $("#view").innerHTML = h;
 }
 
 function renderSheet(S) {
@@ -74,7 +102,7 @@ function renderSheet(S) {
     <div class="bar"><i style="width:${p}%"></i></div><div class="mute" style="margin-top:6px"><b style="color:var(--green)">${d}</b> solved · <b style="color:var(--yellow)">${n - d}</b> remaining</div></div></div>
     <div class="panel diffs">${Object.entries(DIFF).map(([k, [l, c]]) => { const [a, b] = by(k); return !b ? "" : `<div class="dpill"><span style="color:${c}">${l}</span><b>${a}<span class="mute">/${b}</span></b></div>`; }).join("")}</div></div>
     ${S.schema ? `<details class="panel schema"><summary>🗂️ Sample tables used in the solutions (MySQL 8)</summary><pre><code>${esc(S.schema)}</code></pre></details>` : ""}
-    ${filters("Search problems")}`;
+    ${filters("Search problems", qs.filter(x => isS(x.id)).length)}`;
   const filtering = q || filt !== "all";
   S.topics.forEach((t, ti) => {
     const tq = t.subs.flatMap(s => s.qs), td = tq.filter(x => isD(x.id)).length, key = S.id + ":" + ti;
@@ -82,10 +110,10 @@ function renderSheet(S) {
       const rows = s.qs.filter(x => keep(x.id, x.title)); if (!rows.length) return "";
       return `${s.name ? `<div class="sub">${esc(s.name)}</div>` : ""}<table><tbody>${rows.map(x => {
         const [l, c] = DIFF[(x.difficulty || "").toLowerCase()] || ["—", "var(--mute)"];
-        return `<tr>${tick(x.id, "Mark solved")}<td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}${x.tags && x.tags.length ? `<div class="tags">${x.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</td>
+        return `<tr>${tick(x.id, "Mark solved")}<td class="sc">${star(x.id)}</td><td class="vt">${x.url ? A(x.url, esc(x.title)) : esc(x.title)}${x.tags && x.tags.length ? `<div class="tags">${x.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</td>
           <td class="df" style="color:${c}">${l}</td><td class="ic lk">${x.url ? A(x.url, esc(x.platform === "tuf" ? "TUF" : x.platform || "Solve"), "lnk") : ""}${x.links ? [["gfg", "GFG"], ["lc", "LeetCode"], ["cs", "Ninjas"]].filter(([k]) => x.links[k] && !(x.url || "").includes(x.links[k].split("/")[2])).map(([k, l]) => A(x.links[k], l, "lnk " + k)).join("") : ""}</td>
           <td class="ic">${x.solution ? `<button class="solbtn ${openSol.has(x.id) ? "on" : ""}" data-sol="${esc(x.id)}">💡 Solution</button>` : x.video && Player.ytId(x.video) ? `<a class="yt play" data-q="${esc(x.id)}" title="Watch here">▶</a>` : x.video ? A(x.video, "▶", "yt") : ""}</td></tr>
-          ${x.solution && openSol.has(x.id) ? `<tr class="solrow"><td></td><td colspan="4"><div class="sol"><button class="chip copy" data-copy="${esc(x.id)}">📋 Copy</button><pre><code>${hl(x.solution)}</code></pre></div></td></tr>` : ""}`; }).join("")}</tbody></table>`; }).join("");
+          ${x.solution && openSol.has(x.id) ? `<tr class="solrow"><td></td><td></td><td colspan="4"><div class="sol"><button class="chip copy" data-copy="${esc(x.id)}">📋 Copy</button><pre><code>${hl(x.solution)}</code></pre></div></td></tr>` : ""}`; }).join("")}</tbody></table>`; }).join("");
     if (filtering && !body) return;
     h += `<details class="topic" data-k="${esc(key)}" ${filtering || openT[key] ? "open" : ""}><summary><span>${esc(t.name)}</span>
       <span class="tp"><span class="bar sm"><i style="width:${pct(td, tq.length)}%"></i></span>${td}/${tq.length}</span></summary>${body}</details>`;

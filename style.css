@@ -157,3 +157,7 @@ td.ic{white-space:nowrap}
 .sol .copy{position:absolute;top:8px;right:8px;padding:4px 10px;font-size:12px}
 .sol b.k{color:#ff9e64;font-weight:600}.sol i.s{color:#9ece6a;font-style:normal}.sol i.c{color:#6b7280;font-style:italic}
 .schema summary{cursor:pointer;font-weight:600}.schema pre{background:#141414;border-radius:8px;margin-top:10px}
+td.sc{width:30px;padding-left:0;padding-right:0}
+.star{background:none;border:0;cursor:pointer;font-size:19px;line-height:1;color:#5a5a5a;padding:2px 4px;transition:transform .15s,color .15s}
+.star:hover{color:#ffc01e;transform:scale(1.2)}.star.on{color:#ffc01e}
+.empty{color:var(--mute)}.staric{color:#ffc01e}
